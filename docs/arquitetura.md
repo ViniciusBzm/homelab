@@ -1,17 +1,17 @@
 # Arquitetura atual do HomeLab
 
-> **Snapshot documental:** 16/10/2026. Este diagrama descreve o caminho observado de administração e internet, não uma infraestrutura de produção.
+> **Registro de 16/10/2026.** A topologia a seguir mostra a conexão utilizada nos testes, não uma infraestrutura de produção.
 
 ## Topologia em uso
 
 ```mermaid
 flowchart TD
   WAN["Internet / provedor"] --> R["Roteador doméstico / Wi-Fi"]
-  R --> PC["PC Windows<br/>Estação de administração"]
-  PC -->|Compartilhamento de internet (ICS)<br/>Ethernet| WYSE["Dell Wyse 7020<br/>Debian 12"]
-  PC -.->|SSH na rede privada compartilhada| WYSE
-  WYSE --> D["Docker Engine + Compose"]
-  D --> T["Containers temporários de teste<br/>(nenhum permanece criado)"]
+  R --> PC["PC Windows - administração"]
+  PC -->|"ICS via Ethernet"| WYSE["Dell Wyse 7020 - Debian 12"]
+  PC -.->|"SSH pela rede privada"| WYSE
+  WYSE --> D["Docker Engine e Compose"]
+  D --> T["Containers temporários de teste - removidos"]
 ```
 
 **Leitura correta:** o PC recebe internet pela rede doméstica e a compartilha com o Wyse pela Ethernet. O SSH utilizado parte do próprio PC. O Wi-Fi do Wyse não é o caminho de conectividade empregado. O fluxo é **provisório** e depende do Windows.
@@ -49,9 +49,9 @@ O problema de internet do ICS não deve ser confundido com o estado do daemon SS
 
 ```mermaid
 flowchart TD
-  R["Rede doméstica / roteador"] -->|Rede local cabeada a definir| W["Wyse 7020"]
-  A["PC ou dispositivo autorizado"] -.->|SSH na LAN| W
-  W --> C["Poucos serviços leves<br/>com recursos e backup definidos"]
+  R["Rede doméstica / roteador"] -->|"Conexão cabeada a definir"| W["Wyse 7020"]
+  A["PC ou dispositivo autorizado"] -.->|"SSH na rede local"| W
+  W --> C["Serviços leves com recursos e backup definidos - planejados"]
 ```
 
 O plano é retirar a dependência do compartilhamento de internet do Windows quando houver uma conexão física adequada, sem comprar hardware antes de demonstrar a necessidade.
