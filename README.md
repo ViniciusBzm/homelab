@@ -1,86 +1,44 @@
-# HomeLab — aprendizado prático com infraestrutura de baixo custo
+# HomeLab — Debian, rede e Docker em hardware de baixo custo
 
-**Um servidor de R$ 350, problemas reais e documentação de cada etapa.**
+Uso um Dell Wyse 7020 com Debian 12 para praticar administração Linux, acesso remoto, diagnóstico de rede e containers. O repositório registra comandos, decisões e resultados de cada marco.
 
-Este repositório acompanha a construção de um laboratório doméstico com um **Dell Wyse 7020** e **Debian 12**. A ideia é aprender administração Linux, redes, SSH, containers, segurança e observabilidade com o hardware disponível — **sem tratar experimentos como produção, comprar upgrades sem necessidade ou afirmar que algo funciona antes de testar**.
+## Estado atual
 
-O projeto começou pela preparação do sistema e pelo desafio de conectar o servidor usando um PC Windows. Em outubro de 2026, avancei até a instalação do Docker e a execução de containers leves, registrando tanto os resultados quanto os problemas que permaneceram abertos.
-
-## Ambiente
-
-| Item | Configuração / evidência |
-|---|---|
-| Servidor | Dell Wyse 7020, adquirido por R$ 350 |
-| Processador | AMD GX-420CA (identificação anterior; reconferência futura opcional) |
-| Memória | 6 GB nominais; **5,2 GiB** reportados pelo Debian |
-| Armazenamento | 32 GB nominais; raiz com **29 GB** reportados |
-| Sistema operacional | Debian 12 (Bookworm), `amd64` |
-| Administração | SSH pelo PowerShell do Windows |
-| Rede atual | Ethernet com compartilhamento de internet (ICS) do Windows — **provisório** |
-| Containers | Docker Engine **29.9.1**, Docker Compose **v5.6.0** |
-
-> **Valores medidos, não especificações prometidas:** na última medição após instalar o Docker, `free -h` mostrou **642 MiB** de RAM usada e **4,6 GiB** disponíveis; `df -h /` mostrou **6,2 GB** usados e **21 GB** livres. As leituras são instantâneas e anteriores ao download final do Alpine.
-
-## Onde chegamos
-
-| Marco | Situação | Evidência |
+| Marco | Resultado observado | Registro |
 |---|---|---|
-| **M0 — Debian e acesso** | **CONFIRMADO** na configuração testada | Atualizações, inicialização em modo texto e SSH validado após reinício |
-| **M1 — Docker e containers** | **Experimentos CONFIRMADOS; marco ainda PENDENTE DE VALIDAÇÃO pós-reboot** | `hello-world`, Alpine, uso de recursos, parada e remoção |
-| **M2 — Rede estável** | **PLANEJADO** | ICS ainda exige intervenção em algumas reinicializações |
-| **M3 — Observabilidade e recuperação** | **PLANEJADO** | Nenhum monitoramento persistente instalado |
-| **M4 — Serviços próprios e automação** | **PLANEJADO** | Sem aplicação implantada |
-| **M5 — WristOps** | **PLANEJADO** | Ideia de integração por API; ainda sem protótipo |
+| M0 — base Debian e SSH | Sistema atualizado; acesso SSH a partir do Windows validado após reinício | [Passos e diagnóstico](docs/marcos/M0-base-debian-ssh.md) |
+| M1 — Docker | Engine instalado e ativo; `hello-world` e Alpine executados; containers encerrados e removidos | [Comandos e medições](docs/marcos/M1-primeiro-experimento-docker.md) |
+| Próxima verificação | Retorno do Docker e da conectividade externa após reinício | [Critérios pendentes](docs/proximos-passos.md) |
 
-### O que já testei de fato
+O laboratório ainda usa compartilhamento de internet do Windows pela Ethernet. O SSH voltou após reinício nos testes registrados, mas a saída para a internet nem sempre voltou automaticamente. Essa dependência precisa ser resolvida antes de manter serviços permanentes.
 
-- Atualização dos pacotes Debian e validação do kernel `6.1.0-53-amd64` após reinício.
-- Administração por SSH em rede privada, incluindo correção de uma restrição de permissões de conexão do NetworkManager que afetava o acesso pós-boot.
-- Instalação do Docker a partir do repositório oficial e serviço `docker` com status `active`.
-- Execução de `hello-world`, com download e comunicação cliente–daemon confirmados.
-- Execução de Alpine Linux 3.22 com `sleep infinity`; medição pontual de **0,00% de CPU** e **328 KiB de RAM** do container.
-- Parada, remoção e conferência final: **nenhum container permaneceu criado**.
+## Ambiente e arquitetura
 
-**Importante:** não hospedo serviços permanentes nesta etapa. Não publiquei portas dos containers; a rede ainda depende de uma solução provisória.
-
-## Arquitetura atual
+- **Hardware:** Dell Wyse 7020, adquirido por R$ 350; 6 GB de RAM e 32 GB de armazenamento nominais.
+- **Sistema:** Debian 12 (`amd64`), administrado por SSH no PowerShell do Windows.
+- **Containers:** Docker Engine 29.9.1 e Docker Compose v5.6.0 nas sessões documentadas.
+- **Rede:** PC Windows compartilha a conexão por Ethernet com o servidor; topologia provisória.
 
 ```mermaid
 flowchart LR
-    INTERNET["Internet / Wi-Fi doméstico"] --> PC["PC Windows"]
-    PC -->|"ICS por Ethernet<br/>+ acesso SSH"| WYSE["Dell Wyse 7020<br/>Debian 12"]
-    WYSE --> DOCKER["Docker Engine<br/>+ Compose"]
-    DOCKER --> TESTES["Containers de teste<br/>finalizados e removidos"]
+    INTERNET["Internet"] --> PC["PC Windows"]
+    PC -->|"Ethernet com ICS<br/>e SSH"| WYSE["Wyse 7020<br/>Debian 12"]
+    WYSE --> DOCKER["Docker Engine"]
+    DOCKER --> TESTES["Containers temporários<br/>finalizados"]
 ```
 
-O compartilhamento de internet do Windows permitiu avançar sem investimento adicional, mas nem sempre recupera a saída para a internet após reiniciar o Wyse. O SSH e o acesso externo são validados separadamente. **Causa-raiz do ICS: ainda não identificada.**
+[Arquitetura detalhada e limites da rede](docs/arquitetura.md)
 
-[Entender a arquitetura e seus limites](docs/arquitetura.md)
+## Decisões e resultados
 
-## Documentação
+- Mantive o hardware disponível e medi os recursos antes de planejar upgrades. Após instalar o Docker, o Debian reportou **5,2 GiB** de RAM utilizável; a medição pontual mostrou **642 MiB** usados e **21 GB** livres na partição raiz.
+- Separei problemas de SSH e de acesso externo durante o diagnóstico de reinicialização. A correção de permissões no NetworkManager permitiu recuperar o acesso remoto; a causa da falha intermitente do compartilhamento de internet continua aberta.
+- Validei o ciclo de vida de containers com `hello-world` e Alpine Linux 3.22. Na medição registrada, o container Alpine consumiu **328 KiB de RAM** e **0,00% de CPU**. Nenhum container de teste permaneceu criado.
 
-| Documento | Conteúdo |
-|---|---|
-| [M0 — Base Debian, rede e SSH](docs/marcos/M0-base-debian-ssh.md) | Instalação, decisões de boot, atualizações e diagnóstico do acesso remoto |
-| [M1 — Primeiro experimento com Docker](docs/marcos/M1-primeiro-experimento-docker.md) | Comandos executados, resultados de teste, consumo e limpeza |
-| [Arquitetura atual](docs/arquitetura.md) | Diagrama, dependências, riscos e arquitetura futura proposta |
-| [Roadmap e próximos passos](docs/proximos-passos.md) | Marcos verificáveis, pendências e próximos critérios de validação |
+Os números acima são das sessões documentadas em outubro de 2026, não métricas contínuas. Ainda não há aplicação hospedada nem serviço permanente neste laboratório.
 
-## O que estou aprendendo
+## Próximo passo
 
-**Linux e operação:** pacotes, serviços systemd, boot, uso de RAM/disco e diagnóstico.  
-**Redes:** Ethernet, compartilhamento de conexão, IP/gateway/DNS, diferenciação entre SSH funcional e acesso à internet.  
-**Containers:** imagens versus containers, daemon, ciclo de vida, Compose e monitoramento com `docker stats`.  
-**Prática profissional:** reproduzir erros, manter acesso de recuperação, documentar evidências e não mascarar pendências.
+Verificar o serviço Docker e a conectividade externa após reinício do Wyse, registrar o resultado e decidir uma topologia de rede menos dependente do PC Windows. Os marcos de observabilidade, recuperação e hospedagem estão no [roadmap](docs/proximos-passos.md).
 
-## Próximo desafio
-
-Com acesso local disponível, verificar o retorno do **Docker após reboot** e estudar por que a internet do Wyse nem sempre retorna automaticamente pela ponte Windows. Depois, decidir se e quando a topologia deve mudar antes de receber serviços persistentes.
-
-Este laboratório é um ambiente de estudo. **Não é produção nem uma promessa de disponibilidade 24/7.** O objetivo é crescer tecnicamente com decisões justificadas e resultados que outras pessoas possam reproduzir.
-
----
-
-**Última atualização documental:** 16 de outubro de 2026 · **Estado:** etapas iniciais validadas; conectividade pós-reboot e teste de reinício Docker ainda pendentes.
-
-**Referências oficiais:** [Debian](https://www.debian.org/) · [Docker Engine no Debian](https://docs.docker.com/engine/install/debian/) · [Docker Compose](https://docs.docker.com/compose/)
+**Registros completos:** [M0 — Debian e SSH](docs/marcos/M0-base-debian-ssh.md) · [M1 — Docker](docs/marcos/M1-primeiro-experimento-docker.md) · [Arquitetura](docs/arquitetura.md)
