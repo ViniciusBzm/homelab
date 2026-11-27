@@ -1,6 +1,6 @@
 # Migração da instalação existente para as correções do PR #2
 
-**Estado:** **PROPOSTO, aguardando aprovação.** Nada deste procedimento foi executado.
+**Estado:** **EXECUÇÃO PARCIAL em 27/11/2026: fases 1, 2 (reduzida), 4 e 5 concluídas.** A **fase 3 (SSH/firewall) está PENDENTE**: exige console físico disponível e a chave de recuperação validada, e nenhum dos dois estava confirmado no dia. Evidências na seção [Execução parcial](#execução-parcial-27112026).
 **Escopo:** trocar scripts e configuração de backup/guard/firewall pela versão do PR #2 **sem reinstalar a stack** e sem tocar nos dados dos serviços.
 
 ## O que NÃO muda (preservado)
@@ -114,3 +114,46 @@ Esperado:
 | Nome de banco diferente do padrão → restauração reprova | Conferência na fase 2 e `RESTORE_DBS` no `backup.conf` |
 | Backup novo falhar | O export **não** é promovido (a cópia externa fica na versão anterior); reverter pela fase 2 |
 | Indisponibilidade dos painéis | Cerca de 10 s durante o backup (pausa do SQLite), igual ao atual |
+
+## Execução parcial (27/11/2026)
+
+**Autorização:** fases 1, 2, 4 e 5. **Restrições:**
+- não alterar SSH, firewall, rede, usuários nem chaves;
+- na fase 2, **somente** scripts e bibliotecas de backup e restauração;
+- preservar a cópia externa validada;
+- restauração externa obrigatória;
+- reativação garantida dos agendamentos;
+- sem reboot.
+
+**Fase 0.** Interrompida na primeira tentativa: console físico indisponível. Na segunda, o teste da chave de recuperação **não foi feito**, porque a janela falhou por um erro de citação de argumentos no lançador (corrigido e validado antes de seguir). Nenhuma etapa havia rodado; isso foi confirmado no servidor antes de continuar.
+
+| Fase | Evidência real |
+|---|---|
+| Pré | **Cópia externa validada preservada** (snapshot `de8aeee0`, validado pela restauração externa das 12:10) numa pasta à parte que a rotação não toca, somente leitura, com lista SHA256 (9 arquivos). Conferida **intacta** no fim |
+| 1 | Rede de segurança `systemd-run` armada (religaria os timers em 4 h se a sessão caísse). Timers de backup e restauração **suspensos** (`inactive`). Backup com o script antigo `ok` (snapshot `5e53678a`). Tar de recuperação criado com `umask 077`: **`600 root:root`**. Bancos presentes. Hashes de SSH/firewall iguais à referência (`ACESSO_INTOCADO_OK`). No PC: tarefa antiga executada uma vez (`0x0`) e então **suspensa** (`Disabled`) |
+| 2 (reduzida) | Instalados **só** `lib/common.sh`, `lib/restore.sh`, `homelab-backup`, `homelab-restore-test` e `homelab-external-restore-test`, **com SHA256 idênticos ao commit `11a372e`**. **Mantidos na versão anterior** (adiados para a fase 3): `homelab-apply`, `homelab-guard-rollback`, `lib/guard.sh`, `lib/firewall.sh`. `backup.conf` ganhou só `EXPORT_DIR`/`EXPORT_GROUP` e passou na leitura segura. Logs antigos movidos para `/var/log/homelab/legado` (`0640 root:<grupo-admin>`). `ACESSO_INTOCADO_OK` |
+| 4 | Backup novo `ok` (snapshot `cc29ef0f`): pausa/religamento confirmados, forget/prune e check `[OK]`, **export publicado** (10 arquivos, manifesto conferido inclusive pelo administrador sem root; `2750 root:<grupo-admin>`; lock `644`; nenhum temporário). **Restauração local:** `restore --verify`, 5 configurações idênticas, 6/6 arquivos de dados, `integrity_check` OK em `beszel/data.db` e `uptime-kuma/kuma.db`. `ACESSO_INTOCADO_OK` |
+| 5 | No PC: script anterior guardado (`.bak-pre-pr2`). Tarefa reinstalada pelo `register-backup-pull.ps1` do commit `11a372e` (script e módulo idênticos ao repositório; mesmos gatilhos: diário e no logon). Execução: `0x0`, *"10 arquivos conferidos pelo manifesto; geracao cc29ef0f"*. **Restauração externa obrigatória** da nova geração (senha do backup digitada pela pessoa): `EXTERNAL_RESTORE_OK`. Cópia temporária removida. **Timers reativados** e rede de segurança desarmada |
+
+### Validação final (após as fases)
+| Item | Resultado |
+|---|---|
+| SSH | Chave OK; senha `Permission denied (publickey)`; hashes de `sshd_config.d` e `nftables.conf` **iguais aos de antes** |
+| Firewall (visto do PC) | 8090 `200`, 3001 `302`; 8080 e 2375 descartadas (sem mudança) |
+| Contêineres | 4/4 `running`/`healthy`, **criados em 27/11 00:16, ou seja, não recriados** (só pausados/religados pelo backup) |
+| Monitores | 9/9 UP no Uptime Kuma |
+| Bancos SQLite | `integrity_check` OK nos dois (restauração local e externa) |
+| Alertas | Notificação de teste do Kuma **entregue** no ntfy; 5 alertas do Beszel ativos; S.M.A.R.T. `PASSED` |
+| Agendamentos | `homelab-backup.timer` (03:36) e `homelab-restore-test.timer` (01/12) ativos; tarefa do PC habilitada (próxima: 12:00) |
+| Backups | backup `ok cc29ef0f`; restauração local `ok dbs_ok`; restauração externa `EXTERNAL_RESTORE_OK`; export com manifesto conferido |
+| Recursos | RAM 884 MiB; load 0,23; `/` 28%; 51–55 °C; NTP sincronizado; nenhuma unidade com falha |
+
+### Achado durante a validação (aberto, NÃO corrigido no servidor)
+**O push do backup para o Uptime Kuma falha sempre.** O backup religa o Kuma e envia o push logo em seguida, enquanto o Kuma ainda está iniciando (log: `aviso: push para o Uptime Kuma falhou`). O mesmo acontecia com o script anterior. Efeito: o monitor "Backup diário" (janela de 26 h) daria um **falso alerta** de backup atrasado mesmo com os backups em dia.
+- **Mitigação aplicada (sem código):** reenvio manual do push referente ao backup bem-sucedido `cc29ef0f`, com a mensagem identificando o reenvio. Isso adia o falso alerta por cerca de 26 h, mas o push automático continua falhando.
+- **Correção proposta (para revisão, não implantada):** no `homelab-backup.sh`, enviar o push com novas tentativas até o Kuma responder (ex.: até 120 s), com teste de regressão (push falha nas primeiras tentativas e depois passa).
+
+### Pendências
+- **Fase 3** (SSH/firewall, apply e guard novos), com console físico e chave de recuperação validada.
+- Correção do push (acima).
+- Remover `/etc/homelab/docker-lan-tcp` depois da fase 3.

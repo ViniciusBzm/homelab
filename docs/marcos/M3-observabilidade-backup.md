@@ -149,17 +149,17 @@ A revisão apontou 9 pontos. As correções estão no repositório e testadas em
 ### O que está testado em sandbox × o que está implantado no servidor
 | Item | Implantado no servidor (27/11, validado acima) | Correção do PR #2 |
 |---|---|---|
-| Cópia externa | `scp -r` do repositório vivo | Export imutável + manifesto + `flock`: **testado em sandbox, NÃO implantado** |
-| Pausa/religamento no backup | Versão anterior (religamento sem verificação) | **Testado em sandbox, NÃO implantado** |
-| Restauração (local e externa) | Comparação de configs + tamanho dos dados | `--verify`, contagem e `integrity_check`: **testado em sandbox, NÃO implantado** |
-| Firewall | Todas as faixas RFC 1918; portas 8090/3001 | Sub-rede autorizada + IPv6: **testado em sandbox (nft real), NÃO implantado** |
-| Guard | Snapshot de arquivos, sem lock | Lock, recusa com pendência, reversão imediata, snapshot em memória: **testado em sandbox, NÃO implantado** |
-| Logs de root | Na home do administrador | `/var/log/homelab`: **testado em sandbox, NÃO implantado** |
-| Guarda `hl-env` | Não se aplica (versão anterior não lia `HL_*`) | **Testada em sandbox e no namespace real; NÃO implantada** |
-| Cópia pull no Windows | Tarefa atual (`scp`) | Novo script/módulo: **testado no Windows (10/10); tarefa NÃO alterada** |
+| Cópia externa | **Export imutável + manifesto + `flock`** | **IMPLANTADO em 27/11** (migração parcial; restauração externa da nova geração OK) |
+| Pausa/religamento no backup | **Versão nova** (consulta que falha não confirma) | **IMPLANTADO em 27/11** |
+| Restauração (local e externa) | **`--verify`, contagem e `integrity_check`** | **IMPLANTADO em 27/11** (local e externa OK) |
+| Firewall | Todas as faixas RFC 1918; portas 8090/3001 (inalterado) | Sub-rede autorizada + IPv6: testado em sandbox, **PENDENTE (fase 3)** |
+| Guard | Versão anterior (inalterada) | Lock, recusa, reversão imediata, snapshot em memória: testado em sandbox, **PENDENTE (fase 3)** |
+| Logs de root | **`/var/log/homelab`** (backup e restauração); histórico antigo em `legado/` | **IMPLANTADO em 27/11** (apply continua com a versão anterior até a fase 3) |
+| Guarda `hl-env` | **Ativa** nos 3 scripts de backup/restauração instalados | **IMPLANTADA em 27/11**; apply e guard-rollback na fase 3 |
+| Cópia pull no Windows | **Script e módulo novos** (manifesto, rotação recuperável, lock) | **IMPLANTADO em 27/11** (tarefa reinstalada; `0x0`) |
 | Documentação (chave de recuperação, ntfy, limites) | — | Publicada |
 
-A implantação exige sudo no servidor (com guard) e reinstalar a tarefa do Windows, e depende de autorização após a revisão técnica.
+Migração **parcial** executada em 27/11/2026 (fases 1, 2 reduzida, 4 e 5), com evidências em [`docs/migracao-pr2.md`](../migracao-pr2.md#execução-parcial-27112026). A **fase 3** (SSH/firewall/guard) segue pendente até haver console físico e a chave de recuperação validada. Achado aberto: o push do backup para o Kuma falha porque o Kuma ainda está reiniciando (correção proposta, não implantada).
 
 ## Pendente
 
