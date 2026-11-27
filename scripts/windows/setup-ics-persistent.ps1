@@ -33,7 +33,7 @@ try {
     $tRep   = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 5)
     $princ  = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
     $set    = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 3) -MultipleInstances IgnoreNew
-    Register-ScheduledTask -TaskName 'HomeLab ICS Watchdog' -TaskPath '\HomeLab\' -Action $action -Trigger @($tBoot, $tRep) -Principal $princ -Settings $set -Description 'Mantem o ICS Wi-Fi -> Ethernet ativo para o HomeLab-01' -Force | Out-Null
+    Register-ScheduledTask -TaskName 'HomeLab ICS Watchdog' -TaskPath '\HomeLab\' -Action $action -Trigger @($tBoot, $tRep) -Principal $princ -Settings $set -Description 'Mantem o ICS Wi-Fi -> Ethernet ativo para o servidor do HomeLab' -Force | Out-Null
     Get-ScheduledTask -TaskPath '\HomeLab\' | Select-Object TaskName, State | Format-List | Out-Host
 
     Write-Host '== Aplicando ICS agora (via watchdog) =='

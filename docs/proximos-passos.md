@@ -1,16 +1,16 @@
 # Roadmap do HomeLab
 
-**Revisão:** 16/10/2026  
+**Revisão:** 27/11/2026  
 **Princípio:** pequenos marcos, evidências antes de conclusões e nenhum upgrade prematuro.
 
 ## Marcos
 
 | Marco | Escopo | Estado |
 |---|---|---|
-| **M0 — Base Linux e SSH** | Debian, boot texto, acesso SSH e medições | **CONFIRMADO** para a configuração testada; rede externa pós-boot ainda falha intermitentemente |
-| **M1 — Docker e containers** | Docker Engine, Compose, teste, métricas e limpeza | **PENDENTE DE VALIDAÇÃO** do retorno do serviço após reboot; primeiros experimentos **CONFIRMADOS** |
-| **M2 — Rede previsível e segurança base** | Causa-raiz e correção do ICS, hora, SSH só por chave, firewall, atualizações automáticas ([registro](marcos/M2-rede-seguranca-automacao.md)) | **CONFIRMADO** na sessão; **PENDENTE DE VALIDAÇÃO** após reiniciar o PC e o Wyse |
-| **M3 — Observabilidade e recuperação** | Checks úteis, logs, alertas pontuais e backup testado | **PLANEJADO** |
+| **M0 — Base Linux e SSH** | Debian, boot texto, acesso SSH e medições | **CONFIRMADO** (a falha de internet pós-boot foi resolvida no M2) |
+| **M1 — Docker e containers** | Docker Engine, Compose, teste, métricas e limpeza | **CONFIRMADO**, inclusive o retorno após reboot (27/11) |
+| **M2 — Rede previsível e segurança base** | ICS, hora, SSH só por chave, firewall + portas do Docker, rollback, atualizações automáticas ([registro](marcos/M2-rede-seguranca-automacao.md)) | **CONFIRMADO**, inclusive após o reboot do Wyse; **PENDENTE** só a validação após reiniciar o **PC Windows** |
+| **M3 — Observabilidade e recuperação** | Beszel, Uptime Kuma, alertas, backup restic, restauração, chave de recuperação ([registro](marcos/M3-observabilidade-backup.md), [plano](plano-monitoramento-automacao-backup.md)) | **EM ANDAMENTO**: stack e backup **CONFIRMADOS**; painéis, alertas e reboot **PENDENTES** |
 | **M4 — Aplicações e automação** | API/serviço pequeno, deployment controlado e diagnóstico | **PLANEJADO** |
 | **M5 — WristOps** | Prova de conceito de consulta de dados do lab por relógio | **PLANEJADO** |
 | **2027 — Revisão de capacidade** | Considerar troca de hardware somente mediante medições e necessidade real | **ADIADO** |
@@ -19,15 +19,18 @@
 
 ## Próxima sessão — sequência prudente
 
-**Primeiro passo:** com monitor e teclado à disposição, ligar/reiniciar o Wyse e testar acesso SSH, internet externa do Debian e serviço Docker **separadamente**. Confirmar os resultados antes de alterar a configuração.
+**Ponto de retomada (27/11/2026):** concluir o M3. Ao ligar o Wyse, conferir primeiro SSH, internet e os dois painéis (`:8090` e `:3001`).
 
-Em seguida:
+1. Criar as contas de administrador do **Beszel** e do **Uptime Kuma** (feito pela pessoa).
+2. No Beszel: "Add System" pelo socket `/beszel_socket/beszel.sock`; gravar a chave e o token em `stacks/monitoring/secrets/`; confirmar o agente conectado, o histórico, os containers e o S.M.A.R.T.
+3. No Uptime Kuma: monitores HTTP (Beszel, Kuma), TCP 22 do host, DNS, internet, containers via socket-proxy e um monitor **push** do backup.
+4. Alertas por ntfy (tópico aleatório, fora do Git) no Beszel e no Kuma; disparar um alerta de teste.
+5. Testar o login com a **chave de recuperação** e guardá-la fora do PC.
+6. Restaurar a partir da **cópia externa** (`HomeLab-Backups` no PC) e comparar.
+7. Reiniciar o Wyse e provar que a stack volta sozinha.
+8. Abrir o pull request consolidado para a `main`.
 
-1. Validar que o Docker inicia após reboot e que o Compose continua acessível.
-2. Investigar a recuperação do ICS sem atribuir antecipadamente o problema a um único componente.
-3. Registrar medições atualizadas de memória, armazenamento e imagens do Docker.
-4. Planejar um serviço leve que resolva problema real, com limite de recursos, registro de logs e critério de remoção.
-5. Só então considerar observabilidade, recuperação e persistência.
+**Pendências sem prazo:** validar o ICS após reiniciar o PC Windows; trocar a senha antiga do administrador; trocar a bateria CMOS; habilitar a virtualização (SVM) na BIOS do PC, se quiser usar WSL2 ou Docker Desktop.
 
 ## Decisões vigentes
 

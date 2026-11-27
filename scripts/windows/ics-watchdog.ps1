@@ -60,9 +60,16 @@ try {
 
     if ($reason) {
         Write-Log "Reaplicando ICS: $reason"
+        # So desliga o ICS de adaptadores fisicos. Os vEthernet (Hyper-V Default Switch,
+        # WSL) sao gerenciados pelo HNS e nao devem ser tocados.
         foreach ($c in $mgr.EnumEveryConnection) {
+            $p   = $mgr.NetConnectionProps.Invoke($c)
             $cfg = $mgr.INetSharingConfigurationForINetConnection.Invoke($c)
-            if ($cfg.SharingEnabled) { $cfg.DisableSharing() }
+            if (-not $cfg.SharingEnabled) { continue }
+            if ($p.Name -like 'vEthernet*' -or $p.DeviceName -like 'Hyper-V*') {
+                Write-Log "Ignorado (Hyper-V/WSL): $($p.Name)"; continue
+            }
+            $cfg.DisableSharing()
         }
         Start-Sleep -Seconds 2
         $cPub = Get-SharingConfig $mgr $PublicName

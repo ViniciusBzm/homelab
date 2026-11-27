@@ -25,7 +25,12 @@ flowchart TD
 | Acesso | SSH a partir do PowerShell no Windows | **CONFIRMADO**, inclusive em teste de reboot sem login local |
 | Rede | Ethernet com ICS do Windows | **CONFIRMADO** na sessão |
 | Containers | Docker Engine e Compose instalados e testados | **CONFIRMADO** |
-| Aplicações permanentes | Nenhuma implantada neste marco | **NÃO EXECUTADO** |
+| Segurança | SSH só por chave; nftables drop + bloqueio de portas do Docker; guard de reversão | **CONFIRMADO** (M2, após reboot) |
+| Observabilidade | Beszel 0.21.2 + Uptime Kuma 2.5.12 + socket-proxy (`stacks/monitoring`), só na LAN | **IMPLANTADO**; configuração dos painéis **PENDENTE** (M3) |
+| Backup | restic diário + restauração mensal testada + cópia pull no PC | **CONFIRMADO** (primeiro ciclo, 27/11) |
+| Aplicações permanentes | Apenas a stack de monitoramento | — |
+
+O diagrama da stack de observabilidade e do fluxo de backup está no [M3](marcos/M3-observabilidade-backup.md#arquitetura-implantada). As decisões estão em [decisões (ADRs)](decisoes/).
 
 ### Como a rede foi diagnosticada
 

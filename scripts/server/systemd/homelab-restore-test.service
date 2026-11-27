@@ -1,0 +1,9 @@
+[Unit]
+Description=HomeLab - teste real de restauracao do backup
+After=homelab-backup.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/homelab-restore-test
+Nice=10
+IOSchedulingClass=idle

@@ -1,0 +1,109 @@
+# HomeLab - stack de observabilidade (M3)
+#   beszel        hub: dashboard, historico de metricas e alertas      -> :8090 (LAN)
+#   beszel-agent  coleta host + containers + S.M.A.R.T. (rede do host)
+#   uptime-kuma   disponibilidade de servicos e pagina de status       -> :3001 (LAN)
+#   socket-proxy  acesso SOMENTE LEITURA a API do Docker para os dois acima
+#
+# Portas publicadas so ficam acessiveis da rede local se estiverem em
+# /etc/homelab/docker-lan-tcp (firewall nftables, ver scripts/server/homelab-apply.sh).
+# Variaveis em .env (ver .env.example). Segredos do agente em ./secrets (fora do Git).
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }
+
+services:
+  socket-proxy:
+    image: lscr.io/linuxserver/socket-proxy:3.4.8
+    container_name: socket-proxy
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1   # GET /containers/* (lista, inspect, stats)
+      IMAGES: 1       # GET /images/*
+      INFO: 1         # GET /info
+      POST: 0         # nenhuma escrita na API
+      LOG_LEVEL: warning
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    read_only: true
+    tmpfs: [/run]
+    networks: [monitoring]
+    ports:
+      - "127.0.0.1:2375:2375"   # so para o beszel-agent (rede do host); nunca na LAN
+    mem_limit: 64m
+    cpus: 0.25
+    logging: *logging
+
+  beszel:
+    image: henrygd/beszel:0.21.2
+    container_name: beszel
+    restart: unless-stopped
+    environment:
+      APP_URL: ${BESZEL_APP_URL:?defina BESZEL_APP_URL no .env}
+    volumes:
+      - ./data/beszel:/beszel_data
+      - ./data/beszel_socket:/beszel_socket
+    ports:
+      - "8090:8090"
+    networks: [monitoring]
+    healthcheck:
+      test: ["CMD", "/beszel", "health", "--url", "http://localhost:8090"]
+      interval: 60s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    mem_limit: 256m
+    cpus: 1.0
+    logging: *logging
+
+  beszel-agent:
+    image: henrygd/beszel-agent:0.21.2-alpine
+    container_name: beszel-agent
+    restart: unless-stopped
+    network_mode: host
+    depends_on: [beszel, socket-proxy]
+    environment:
+      LISTEN: /beszel_socket/beszel.sock
+      HUB_URL: http://localhost:8090
+      KEY_FILE: /secrets/key
+      TOKEN_FILE: /secrets/token
+      DOCKER_HOST: tcp://127.0.0.1:2375
+      SMART_DEVICES: /dev/sda:sat
+      SKIP_GPU: "true"
+    volumes:
+      - ./data/beszel_agent:/var/lib/beszel-agent
+      - ./data/beszel_socket:/beszel_socket
+      - ./secrets:/secrets:ro
+    devices:
+      - /dev/sda:/dev/sda
+    cap_add: [SYS_RAWIO]   # leitura S.M.A.R.T. de disco SATA
+    healthcheck:
+      test: ["CMD", "/agent", "health"]
+      interval: 60s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    mem_limit: 128m
+    cpus: 0.5
+    logging: *logging
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:2.5.12-slim
+    container_name: uptime-kuma
+    restart: unless-stopped
+    environment:
+      UPTIME_KUMA_DB_TYPE: sqlite
+    volumes:
+      - ./data/uptime-kuma:/app/data
+    ports:
+      - "3001:3001"
+    networks: [monitoring]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # checks de servicos do proprio host
+    mem_limit: 384m
+    cpus: 1.0
+    logging: *logging
+
+networks:
+  monitoring:
+    name: monitoring
