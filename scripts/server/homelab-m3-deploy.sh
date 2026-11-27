@@ -9,12 +9,19 @@
 # 3. Stack Compose em /opt/homelab        7. Resumo de recursos
 # 4. Scripts/bibliotecas + firewall (homelab-apply --only-ssh-firewall, com guard)
 set -uo pipefail
-# >>> hl-env: HL_* so valem no sandbox de testes (namespace de usuario). Num root real
-# (mapa de uid identidade) toda variavel HL_* herdada e descartada: nada de PATH,
-# bibliotecas ou caminhos injetados pelo ambiente em scripts privilegiados.
-if grep -qE '^[[:space:]]*0[[:space:]]+0[[:space:]]+4294967295[[:space:]]*$' /proc/self/uid_map 2>/dev/null; then
-  for _hl_v in $(compgen -v HL_); do unset "$_hl_v"; done; unset _hl_v
+# >>> hl-env: HL_* so valem no sandbox de testes. Falha segura: os overrides so sao
+# mantidos se o processo estiver POSITIVAMENTE num namespace de usuario do tipo
+# "unshare -r" (uid_map de uma linha "0 <uid> 1"). Root real, uid_map ilegivel ou
+# qualquer falha => todas as HL_* herdadas sao descartadas. O grep usado e o do
+# caminho absoluto do sistema (nao depende do PATH herdado).
+_hl_keep=0
+if [ -r /proc/self/uid_map ] && [ -x /usr/bin/grep ] \
+   && /usr/bin/grep -qxE '[[:space:]]*0[[:space:]]+[1-9][0-9]*[[:space:]]+1[[:space:]]*' /proc/self/uid_map 2>/dev/null \
+   && [ "$(/usr/bin/grep -c '' /proc/self/uid_map 2>/dev/null)" = 1 ]; then
+  _hl_keep=1
 fi
+if [ "$_hl_keep" != 1 ]; then for _hl_v in $(compgen -v HL_); do unset "$_hl_v"; done; fi
+unset _hl_keep _hl_v
 # <<< hl-env
 export PATH=${HL_PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}
 export DEBIAN_FRONTEND=noninteractive

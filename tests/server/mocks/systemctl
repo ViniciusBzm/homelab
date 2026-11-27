@@ -1,7 +1,7 @@
 #!/bin/bash
 S=${MOCK_STATE:?}; echo "systemctl $*" >> "$S/calls"
 case "$1" in
-  is-enabled) [ -f "$S/nft_enabled" ]; exit ;;
+  is-enabled) if [ -f "$S/nft_enabled" ]; then echo enabled; exit 0; else echo disabled; exit 1; fi ;;
   enable)  [[ " $* " == *" nftables "* ]] && touch "$S/nft_enabled"; exit 0 ;;
   disable) [[ " $* " == *" nftables "* ]] && rm -f "$S/nft_enabled"; exit 0 ;;
   reload)  [ -n "${MOCK_RELOAD_FAIL:-}" ] && exit 1; exit 0 ;;

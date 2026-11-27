@@ -30,22 +30,39 @@ t_mocks_sao_usados_pelos_scripts() {
 }
 
 # Executa o bloco "hl-env" de um script com um uid_map simulado e devolve o PATH resultante.
+# PATH herdado aponta para um diretorio com um "grep" falso que sempre aprova.
 hl_env_path_with_map() {
   local script=$1 map=$2 blk
-  blk=$(sed -n '/>>> hl-env/,/<<< hl-env/p' "$script" | sed "s|/proc/self/uid_map|$map|")
-  env -i HL_PATH=/maligno HL_LIB_DIR=/maligno HL_FAILS=9 bash -c "$blk
+  mkdir -p "$SB/evil"; printf '#!/bin/sh\nexit 0\n' > "$SB/evil/grep"; chmod +x "$SB/evil/grep"
+  blk=$(sed -n '/>>> hl-env/,/<<< hl-env/p' "$script" | sed "s|/proc/self/uid_map|$map|g")
+  env -i PATH="$SB/evil:/usr/bin:/bin" HL_PATH=/maligno HL_LIB_DIR=/maligno HL_FAILS=9 bash -c "$blk
 export PATH=\${HL_PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}
 echo \"\$PATH|\${HL_LIB_DIR:-}|\${HL_FAILS:-}\""
 }
 
 t_hl_env_descartado_em_root_real() {
+  local PROD="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin||"
   printf '         0          0 4294967295\n' > "$SB/map-real"     # namespace inicial (root de verdade)
   printf '         0       1000          1\n' > "$SB/map-teste"    # namespace de usuario (sandbox)
+  printf '         0       1000          1\n         1     100000      65536\n' > "$SB/map-duas"   # nao e o sandbox
+  printf 'lixo\n' > "$SB/map-lixo"
   for s in "$REPO"/scripts/server/homelab-*.sh; do
-    out=$(hl_env_path_with_map "$s" "$SB/map-real")
-    [ "$out" = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin||" ] || fail "$(basename "$s"): HL_* aceito em root real ($out)"
+    n=$(basename "$s")
+    [ "$(hl_env_path_with_map "$s" "$SB/map-real")" = "$PROD" ] || fail "$n: HL_* aceito em root real (grep falso no PATH)"
+    [ "$(hl_env_path_with_map "$s" "$SB/inexistente")" = "$PROD" ] || fail "$n: uid_map ilegivel deveria descartar"
+    [ "$(hl_env_path_with_map "$s" "$SB/map-duas")" = "$PROD" ] || fail "$n: mapa nao identificado deveria descartar"
+    [ "$(hl_env_path_with_map "$s" "$SB/map-lixo")" = "$PROD" ] || fail "$n: mapa invalido deveria descartar"
     out=$(hl_env_path_with_map "$s" "$SB/map-teste")
-    [ "${out%%|*}" = "/maligno" ] || fail "$(basename "$s"): sandbox deveria aceitar HL_PATH ($out)"
+    [ "${out%%|*}" = "/maligno" ] || fail "$n: sandbox deveria aceitar HL_PATH ($out)"
+  done
+}
+
+t_hl_env_usa_grep_por_caminho_absoluto() {
+  for s in "$REPO"/scripts/server/homelab-*.sh; do
+    blk=$(sed -n '/>>> hl-env/,/<<< hl-env/p' "$s")
+    grep -q '/usr/bin/grep -qxE' <<< "$blk" || fail "$(basename "$s"): sem /usr/bin/grep"
+    bare=$(grep -v '^[[:space:]]*#' <<< "$blk" | grep -oE '(/usr/bin/)?grep ' | grep -vc '^/usr/bin/grep ')
+    [ "$bare" -eq 0 ] || fail "$(basename "$s"): $bare chamada(s) de grep sem caminho absoluto"
   done
 }
 

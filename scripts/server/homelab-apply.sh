@@ -9,12 +9,19 @@
 # Uma unica execucao por vez (lock) e nenhuma nova enquanto um guard estiver pendente.
 set -u
 export DEBIAN_FRONTEND=noninteractive
-# >>> hl-env: HL_* so valem no sandbox de testes (namespace de usuario). Num root real
-# (mapa de uid identidade) toda variavel HL_* herdada e descartada: nada de PATH,
-# bibliotecas ou caminhos injetados pelo ambiente em scripts privilegiados.
-if grep -qE '^[[:space:]]*0[[:space:]]+0[[:space:]]+4294967295[[:space:]]*$' /proc/self/uid_map 2>/dev/null; then
-  for _hl_v in $(compgen -v HL_); do unset "$_hl_v"; done; unset _hl_v
+# >>> hl-env: HL_* so valem no sandbox de testes. Falha segura: os overrides so sao
+# mantidos se o processo estiver POSITIVAMENTE num namespace de usuario do tipo
+# "unshare -r" (uid_map de uma linha "0 <uid> 1"). Root real, uid_map ilegivel ou
+# qualquer falha => todas as HL_* herdadas sao descartadas. O grep usado e o do
+# caminho absoluto do sistema (nao depende do PATH herdado).
+_hl_keep=0
+if [ -r /proc/self/uid_map ] && [ -x /usr/bin/grep ] \
+   && /usr/bin/grep -qxE '[[:space:]]*0[[:space:]]+[1-9][0-9]*[[:space:]]+1[[:space:]]*' /proc/self/uid_map 2>/dev/null \
+   && [ "$(/usr/bin/grep -c '' /proc/self/uid_map 2>/dev/null)" = 1 ]; then
+  _hl_keep=1
 fi
+if [ "$_hl_keep" != 1 ]; then for _hl_v in $(compgen -v HL_); do unset "$_hl_v"; done; fi
+unset _hl_keep _hl_v
 # <<< hl-env
 export PATH=${HL_PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}
 HL_LIB_DIR=${HL_LIB_DIR:-$(dirname -- "$(readlink -f -- "$0")")/lib}
@@ -136,8 +143,13 @@ ROLLBACK_DONE=0
 rollback_now() {
   [ "$ROLLBACK_DONE" -eq 1 ] && return; ROLLBACK_DONE=1
   echo "!!! falha durante SSH/firewall: restaurando o estado anterior agora"
-  guard_restore && hl_ok "estado anterior restaurado" || hl_fail "restauracao incompleta: verifique pelo console"
-  guard_disarm
+  if guard_restore; then
+    hl_ok "estado anterior restaurado"; guard_disarm
+  else
+    # Nao desarma: o timer tenta de novo e o "armed" bloqueia novas aplicacoes.
+    echo "$(date -Is) restauracao imediata incompleta" > "$GUARD_DIR/rollback-failed"
+    hl_fail "restauracao incompleta: guard MANTIDO armado (nova tentativa no timer). Verifique pelo console."
+  fi
 }
 trap 'rollback_now; rm -rf -- "$TMPD"; exit 130' INT TERM HUP
 

@@ -1,0 +1,15 @@
+### Testes de regressao novos executados contra o codigo do commit anterior (f4b9029)
+### Esperado: os testes novos FALHAM no codigo antigo (prova de que detectam os defeitos)
+  FALHOU t_apply_reversao_imediata_incompleta_nao_desarma
+  FALHOU t_backup_consulta_falha_apos_parar_nao_confirma
+  FALHOU t_backup_consulta_falha_apos_religar_reprova
+  FALHOU t_export_falha_ao_promover_restaura_anterior
+  FALHOU t_export_nova_geracao_invalida_nao_e_promovida
+  FALHOU t_export_recupera_troca_interrompida
+  FALHOU t_guard_restauracao_em_transacao_unica
+  FALHOU t_guard_rollback_incompleto_mantem_armado
+  FALHOU t_guard_snapshot_falha_nada_muda
+  PASSOU t_guarda_hl_env_antes_do_path_em_todos
+  FALHOU t_hl_env_descartado_em_root_real
+  FALHOU t_hl_env_usa_grep_por_caminho_absoluto
+Resultado: 47 passaram, 11 falharam (2026-11-27T13:33:29-03:00, 6.1.0-56-amd64, restic 0.14.0, nftables v1.0.6 (Lester Gooch #5))

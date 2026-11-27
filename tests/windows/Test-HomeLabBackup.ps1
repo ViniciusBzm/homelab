@@ -60,6 +60,25 @@ try {
         Invoke-HomeLabRotation -Incoming (Join-Path $r 'restic.incoming') -Current (Join-Path $r 'restic') -Previous (Join-Path $r 'restic.previous')
         ((Get-Content (Join-Path $r 'restic\marca')) -eq 'restic.incoming') -and ((Get-Content (Join-Path $r 'restic.previous\marca')) -eq 'restic') -and -not (Test-Path (Join-Path $r 'restic.incoming'))
     }
+    Check 'rotacao que falha preserva a copia atual e a anterior' {
+        $r = Join-Path $base 'rotfalha'; New-Item -ItemType Directory $r | Out-Null
+        foreach ($n in 'restic', 'restic.previous', 'restic.incoming') { New-Item -ItemType Directory (Join-Path $r $n) | Out-Null; Set-Content (Join-Path $r "$n\marca") $n }
+        # Um arquivo aberto dentro de "incoming" impede o Windows de renomear a pasta.
+        $h = [IO.File]::Open((Join-Path $r 'restic.incoming\marca'), 'Open', 'Read', 'None')
+        $threw = $false
+        try { Invoke-HomeLabRotation -Incoming (Join-Path $r 'restic.incoming') -Current (Join-Path $r 'restic') -Previous (Join-Path $r 'restic.previous') }
+        catch { $threw = $true } finally { $h.Dispose() }
+        $threw -and ((Get-Content (Join-Path $r 'restic\marca')) -eq 'restic') -and ((Get-Content (Join-Path $r 'restic.previous\marca')) -eq 'restic.previous') -and -not (Test-Path (Join-Path $r 'restic.previous.old'))
+    }
+    Check 'pull exclusivo: segunda execucao nao obtem o lock' {
+        $lp = Join-Path $base 'pull.lock'; New-Item -ItemType Directory -Force $base | Out-Null
+        $a = Enter-HomeLabPullLock -Path $lp
+        $b = Enter-HomeLabPullLock -Path $lp
+        $ok = ($null -ne $a) -and ($null -eq $b)
+        $a.Dispose()
+        $c = Enter-HomeLabPullLock -Path $lp; $ok = $ok -and ($null -ne $c); $c.Dispose()
+        $ok
+    }
     Check 'pull nao usa scp do repositorio vivo' {
         $src = Get-Content (Join-Path $repo 'scripts\windows\pull-homelab-backup.ps1') -Raw
         ($src -notmatch 'scp\.exe') -and ($src -match 'flock -s') -and ($src -match 'Test-HomeLabManifest')

@@ -22,6 +22,12 @@ A revisão técnica do PR #2 apontou riscos no guard de SSH/firewall e nos scrip
 - **Códigos de saída:** todos os scripts terminam com `hl_finish`, que sai com 1 se qualquer etapa falhou.
 - **Testável sem abrir brecha:** os caminhos aceitam sobrescrita `HL_*` e o `PATH` aceita `HL_PATH` **somente dentro de um namespace de usuário** (o sandbox de testes). O bloco `hl-env` no topo de cada script apaga toda variável `HL_*` quando `/proc/self/uid_map` é o mapa identidade, ou seja, root real. Isso impede que um ambiente herdado (`sudo -E`, `sudo VAR=… cmd`, shell de root) injete executáveis ou bibliotecas. O `env_reset` do sudo é a primeira camada; o `hl-env` é a segunda.
 
+## Revisão final (27/11/2026)
+- **Snapshot:** cada operação é verificada. "Tabela ausente" é distinguida de "erro ao consultar o nft"; um estado desconhecido do serviço aborta. O snapshot anterior só é substituído depois que o novo está completo.
+- **Restauração do firewall em uma transação nft** (`table` + `delete table` + recriação no mesmo `nft -f`), sem janela sem firewall.
+- **Rollback incompleto não desarma:** `armed` permanece, `rollback-failed` é gravado, a unidade termina com erro e novas aplicações são recusadas até verificação manual.
+- **`hl-env` com falha segura:** só mantém `HL_*` com identificação **positiva** do namespace de teste, via `/usr/bin/grep` absoluto.
+
 ## Evidência (sandbox, 27/11/2026)
 Testes `t_apply_*`, `t_guard_*` e `t_log_*`: concorrência recusada; guard pendente recusado; sshd inválido e falha na carga do nft revertidos **na hora** (estado em memória idêntico ao anterior); configuração inválida não muda nada; sem confirmação restaura; com confirmação mantém; confirmação por link simbólico ignorada; reexecução volta ao **último estado confirmado**; tabela carregada com serviço desabilitado restaurada com o serviço ainda desabilitado; log não segue link simbólico.
 

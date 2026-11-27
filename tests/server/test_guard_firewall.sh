@@ -144,3 +144,39 @@ t_guard_restaura_regras_em_memoria_com_servico_desabilitado() {
   [ "$(runtime)" = "$before" ] || fail "tabela carregada (sem servico) nao restaurada"
   [ ! -f "$MOCK_STATE/nft_enabled" ] || fail "servico deveria continuar desabilitado"
 }
+
+# --- Regressao (revisao final do PR #2) ---------------------------------------
+
+t_guard_snapshot_falha_nada_muda() {
+  setup_guard_old_state; before=$(runtime)
+  MOCK_NFT_LIST_FAIL=1 assert_nonzero apply
+  [ "$(runtime)" = "$before" ] && grep -q 'drop-in ANTIGO' "$HL_SSHD_DROPIN" || fail "estado alterado sem snapshot valido"
+  [ ! -f "$HL_GUARD_DIR/armed" ] || fail "guard armado sem snapshot"
+}
+
+t_guard_restauracao_em_transacao_unica() {
+  setup_guard_old_state; before=$(runtime)
+  assert_rc 0 apply; : > "$MOCK_STATE/nft-calls"
+  assert_rc 0 rollback
+  [ "$(runtime)" = "$before" ] || fail "estado nao restaurado"
+  ! grep -q '^nft delete table' "$MOCK_STATE/nft-calls" || fail "delete separado: janela sem firewall"
+  [ "$(grep -c '^nft -f' "$MOCK_STATE/nft-calls")" -eq 1 ] || fail "restauracao deveria ser um unico nft -f"
+  head -2 "$HL_GUARD_DIR/restore.nft" | grep -q 'delete table inet homelab_fw' || fail "transacao sem delete+recriacao"
+}
+
+t_guard_rollback_incompleto_mantem_armado() {
+  setup_guard_old_state
+  assert_rc 0 apply
+  MOCK_NFT_RESTORE_FAIL=1 assert_nonzero rollback
+  [ -f "$HL_GUARD_DIR/armed" ] || fail "guard desarmado apos rollback incompleto"
+  [ -f "$HL_GUARD_DIR/rollback-failed" ] || fail "falha nao registrada"
+  assert_rc 5 apply                                  # bloqueia novas aplicacoes
+}
+
+t_apply_reversao_imediata_incompleta_nao_desarma() {
+  setup_guard_old_state
+  MOCK_NFT_LOAD_FAIL=1 MOCK_NFT_RESTORE_FAIL=1 assert_nonzero apply
+  [ -f "$HL_GUARD_DIR/armed" ] || fail "guard desarmado apos reversao incompleta"
+  [ -f "$HL_GUARD_DIR/rollback-failed" ] || fail "falha nao registrada"
+  assert_grep 'guard MANTIDO armado' "$HL_LOG_DIR/homelab-apply.log"
+}

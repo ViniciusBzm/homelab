@@ -19,6 +19,9 @@ $prev = Join-Path $Dest 'restic.previous'
 $tmp  = Join-Path $Dest 'restic.incoming'
 function Write-Log([string]$m) { "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $m" | Add-Content -Path $log -Encoding UTF8 }
 
+# Um pull por vez (tarefa agendada + execucao manual, por exemplo).
+$lock = Enter-HomeLabPullLock -Path (Join-Path $Dest 'pull.lock')
+if (-not $lock) { Write-Log 'ignorado: outro pull em andamento'; exit 2 }
 try {
     if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Recurse -Force }
     New-Item -ItemType Directory -Path $tmp | Out-Null
@@ -33,7 +36,8 @@ try {
     $gen = (Get-Content -LiteralPath (Join-Path $cur 'GENERATION') -ErrorAction SilentlyContinue | Select-Object -First 1)
     Write-Log ("ok: {0} arquivos conferidos pelo manifesto; geracao {1}" -f $check.Checked, $gen)
 } catch {
-    Write-Log "FALHA: $($_.Exception.Message) (copia anterior preservada)"
+    Write-Log "FALHA: $($_.Exception.Message) (copia atual preservada)"
     if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue }
-    exit 1
+    $lock.Dispose(); exit 1
 }
+$lock.Dispose()

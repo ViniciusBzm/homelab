@@ -33,7 +33,7 @@ O disco é um pendrive, o maior risco de perda total. É preciso backup automati
 - A restauração (local e externa) usa `restore --verify`, exige que cada banco SQLite esperado exista e passe no `PRAGMA integrity_check`, e que a contagem de arquivos restaurados seja **igual à do snapshot**. Antes, um diretório vazio passava.
 - A URL de push na home do administrador é tratada como **não confiável**: sem link simbólico, com dono certo, só `http://127.0.0.1:<porta>/api/push/<token>` e `curl --proto =http`.
 
-**Testes:** 48 cenários de servidor em sandbox (sucesso e falha) e 10 do lado Windows, num total de 58 aprovados. Ver [`tests/`](../../tests/). **Ainda não implantado no servidor.**
+**Testes:** 58 cenários de servidor em sandbox e 12 do Windows (70 aprovados). Revisão final: a nova geração do export é validada **antes** de ser promovida; se a troca falhar, a anterior volta ao lugar; uma troca interrompida é recuperada na execução seguinte; uma consulta ao Docker que falha nunca confirma parada ou religamento; no Windows, a rotação recupera a cópia atual em caso de falha e o pull é exclusivo (lock por arquivo). Ver [`tests/`](../../tests/). **Ainda não implantado no servidor.**
 
 ## Alternativas
 - **Push do servidor para o PC:** exigiria um servidor SSH no Windows (mudança de sistema e porta aberta) e daria ao servidor acesso de escrita no PC.

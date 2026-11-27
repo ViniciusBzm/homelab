@@ -1,5 +1,9 @@
 #!/bin/bash
 # mock do docker: estado em $MOCK_STATE/running (um servico por linha)
+#   MOCK_STOP_FAIL=1             stop falha (parada parcial)
+#   MOCK_START_FAIL=1            start falha
+#   MOCK_PS_FAIL_AFTER_STOP=1    "ps" falha depois de um stop
+#   MOCK_PS_FAIL_AFTER_START=1   "ps" falha depois de um start
 S=${MOCK_STATE:?}; echo "docker $*" >> "$S/calls"; touch "$S/running"
 [ "$1" = ps ] && { cat "$S/running"; exit 0; }
 [ "$1" = compose ] || exit 0
@@ -7,11 +11,16 @@ shift; [ "${1:-}" = -f ] && shift 2
 cmd=${1:-}; shift || true
 remove() { grep -vx -- "$1" "$S/running" > "$S/r.tmp" || true; mv "$S/r.tmp" "$S/running"; }
 case "$cmd" in
-  ps) cat "$S/running" ;;
+  ps)
+    [ -n "${MOCK_PS_FAIL_AFTER_STOP:-}" ] && [ -f "$S/stopped" ] && [ ! -f "$S/started" ] && { echo "mock: daemon indisponivel" >&2; exit 1; }
+    [ -n "${MOCK_PS_FAIL_AFTER_START:-}" ] && [ -f "$S/started" ] && { echo "mock: daemon indisponivel" >&2; exit 1; }
+    cat "$S/running" ;;
   stop)
-    if [ -n "${MOCK_STOP_FAIL:-}" ]; then remove "$1"; exit 1; fi   # parada parcial
+    touch "$S/stopped"
+    if [ -n "${MOCK_STOP_FAIL:-}" ]; then remove "$1"; exit 1; fi
     for s; do remove "$s"; done ;;
   start)
+    touch "$S/started"
     [ -n "${MOCK_START_FAIL:-}" ] && exit 1
     for s; do grep -qx -- "$s" "$S/running" || echo "$s" >> "$S/running"; done ;;
 esac

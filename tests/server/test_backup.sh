@@ -108,3 +108,49 @@ t_log_nao_segue_link_simbolico() {
   [ "$(cat "$SB/vitima")" = original ] || fail "log escreveu atraves do link"
   [ ! -L "$HL_LOG_DIR/homelab-backup.log" ] || fail "link nao foi substituido"
 }
+
+# --- Regressao (revisao final do PR #2) ---------------------------------------
+
+t_backup_consulta_falha_apos_parar_nao_confirma() {
+  setup_backup
+  MOCK_PS_FAIL_AFTER_STOP=1 assert_nonzero backup
+  [ "$(snapshots)" -eq 0 ] || fail "consulta falha nao pode confirmar a parada"
+  assert_grep 'parada nao confirmada' "$HL_LOG_DIR/homelab-backup.log"
+  assert_grep 'compose -f .* start beszel uptime-kuma' "$MOCK_STATE/calls"
+  grep -qx beszel "$MOCK_STATE/running" || fail "servicos nao religados"
+}
+
+t_backup_consulta_falha_apos_religar_reprova() {
+  setup_backup
+  MOCK_PS_FAIL_AFTER_START=1 assert_nonzero backup
+  assert_grep '^fail ' "$HL_STATE_DIR/homelab-backup.status"
+  assert_grep 'religamento nao confirmado' "$HL_LOG_DIR/homelab-backup.log"
+}
+
+t_export_nova_geracao_invalida_nao_e_promovida() {
+  setup_backup
+  assert_rc 0 backup; gen1=$(cat "$SB/state/export/GENERATION"); sleep 1
+  HL_TEST_CORRUPT_NEW_EXPORT=1 assert_nonzero backup
+  [ "$(cat "$SB/state/export/GENERATION")" = "$gen1" ] || fail "geracao invalida foi promovida"
+  ( cd "$SB/state/export" && sha256sum -c --quiet MANIFEST.sha256 ) || fail "geracao anterior danificada"
+  ! ls -d "$SB/state/export".new.* >/dev/null 2>&1 || fail "sobrou diretorio .new"
+}
+
+t_export_falha_ao_promover_restaura_anterior() {
+  setup_backup
+  assert_rc 0 backup; gen1=$(cat "$SB/state/export/GENERATION"); sleep 1
+  HL_TEST_FAIL_PROMOTE=1 assert_nonzero backup
+  [ -d "$SB/state/export" ] || fail "export sumiu apos falha na promocao"
+  [ "$(cat "$SB/state/export/GENERATION")" = "$gen1" ] || fail "geracao anterior nao restaurada"
+  ( cd "$SB/state/export" && sha256sum -c --quiet MANIFEST.sha256 ) || fail "geracao anterior danificada"
+  ! ls -d "$SB/state/export".old.* "$SB/state/export".new.* >/dev/null 2>&1 || fail "sobraram diretorios temporarios"
+}
+
+t_export_recupera_troca_interrompida() {
+  setup_backup
+  assert_rc 0 backup
+  mv "$SB/state/export" "$SB/state/export.old.4242"          # queda entre os dois "mv"
+  assert_rc 0 backup
+  assert_grep 'geracao anterior recuperada' "$HL_LOG_DIR/homelab-backup.log"
+  ( cd "$SB/state/export" && sha256sum -c --quiet MANIFEST.sha256 ) || fail "export invalido apos recuperacao"
+}

@@ -40,9 +40,37 @@ function Invoke-HomeLabRotation {
     param([Parameter(Mandatory)][string]$Incoming,
           [Parameter(Mandatory)][string]$Current,
           [Parameter(Mandatory)][string]$Previous)
-    if (Test-Path -LiteralPath $Previous) { Remove-Item -LiteralPath $Previous -Recurse -Force }
-    if (Test-Path -LiteralPath $Current)  { Rename-Item -LiteralPath $Current -NewName (Split-Path $Previous -Leaf) }
-    Rename-Item -LiteralPath $Incoming -NewName (Split-Path $Current -Leaf)
+    # A copia anterior so e apagada no fim; qualquer falha devolve atual/anterior ao lugar.
+    $parked = "$Previous.old"
+    if (Test-Path -LiteralPath $parked) { Remove-Item -LiteralPath $parked -Recurse -Force }
+    $movedPrev = $false; $movedCur = $false
+    try {
+        if (Test-Path -LiteralPath $Previous) { Rename-Item -LiteralPath $Previous -NewName (Split-Path $parked -Leaf); $movedPrev = $true }
+        if (Test-Path -LiteralPath $Current)  { Rename-Item -LiteralPath $Current -NewName (Split-Path $Previous -Leaf); $movedCur = $true }
+        Rename-Item -LiteralPath $Incoming -NewName (Split-Path $Current -Leaf)
+    } catch {
+        if ($movedCur -and -not (Test-Path -LiteralPath $Current) -and (Test-Path -LiteralPath $Previous)) {
+            Rename-Item -LiteralPath $Previous -NewName (Split-Path $Current -Leaf)
+        }
+        if ($movedPrev -and -not (Test-Path -LiteralPath $Previous) -and (Test-Path -LiteralPath $parked)) {
+            Rename-Item -LiteralPath $parked -NewName (Split-Path $Previous -Leaf)
+        }
+        throw "rotacao falhou; copia atual preservada: $($_.Exception.Message)"
+    }
+    if (Test-Path -LiteralPath $parked) { Remove-Item -LiteralPath $parked -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
-Export-ModuleMember -Function Test-HomeLabManifest, Invoke-HomeLabRotation
+function Enter-HomeLabPullLock {
+    <#
+      Lock exclusivo entre processos (arquivo aberto sem compartilhamento).
+      Devolve o FileStream (manter aberto ate o fim) ou $null se outro pull estiver rodando.
+    #>
+    param([Parameter(Mandatory)][string]$Path)
+    try {
+        return [System.IO.File]::Open($Path, [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+    } catch [System.IO.IOException] {
+        return $null
+    }
+}
+
+Export-ModuleMember -Function Test-HomeLabManifest, Invoke-HomeLabRotation, Enter-HomeLabPullLock

@@ -24,28 +24,49 @@ guard_log() { echo "$(date -Is) guard: $*" | tee -a "$GUARD_DIR/guard.log" >&2; 
 
 guard_pending() { [ -f "$GUARD_DIR/armed" ]; }
 
-# Fotografa o estado atual (atomico: snapshot.new -> snapshot).
+# Fotografa o estado atual. Toda operacao e verificada; qualquer falha devolve !=0
+# e o snapshot anterior (se houver) continua intacto.
 guard_snapshot() {
-  install -d -m 0700 -- "$GUARD_DIR"
-  local s="$GUARD_DIR/snapshot.new"
-  rm -rf -- "$s"; install -d -m 0700 -- "$s"
-  if [ -f "$SSHD_DROPIN" ]; then cp -a -- "$SSHD_DROPIN" "$s/sshd-dropin.conf"; fi
-  if [ -f "$NFT_CONF" ]; then cp -a -- "$NFT_CONF" "$s/nftables.conf"; fi
-  if "$NFT_BIN" list table inet homelab_fw > "$s/runtime.nft" 2>/dev/null; then
-    touch "$s/runtime-present"
-  else
-    rm -f "$s/runtime.nft"
+  local s="$GUARD_DIR/snapshot.new" tables state
+  install -d -m 0700 -- "$GUARD_DIR" || return 1
+  rm -rf -- "$s" && install -d -m 0700 -- "$s" || return 1
+  if [ -e "$SSHD_DROPIN" ]; then cp -a -- "$SSHD_DROPIN" "$s/sshd-dropin.conf" || return 1; fi
+  if [ -e "$NFT_CONF" ]; then cp -a -- "$NFT_CONF" "$s/nftables.conf" || return 1; fi
+  # "Tabela ausente" e um estado valido; "erro ao consultar o nft" nao e.
+  tables=$("$NFT_BIN" list tables inet) || { guard_log "ERRO: nft list tables falhou"; return 1; }
+  if grep -qx 'table inet homelab_fw' <<< "$tables"; then
+    "$NFT_BIN" list table inet homelab_fw > "$s/runtime.nft" && [ -s "$s/runtime.nft" ] \
+      || { guard_log "ERRO: nao foi possivel gravar as regras em memoria"; return 1; }
+    : > "$s/runtime-present" || return 1
   fi
-  if systemctl is-enabled --quiet nftables 2>/dev/null; then touch "$s/nft-enabled"; fi
-  rm -rf -- "$GUARD_DIR/snapshot"; mv -- "$s" "$GUARD_DIR/snapshot"
+  state=$(systemctl is-enabled nftables 2>/dev/null)
+  case "$state" in
+    enabled) : > "$s/nft-enabled" || return 1 ;;
+    disabled|masked|static|indirect|alias|linked*) ;;
+    *) guard_log "ERRO: estado do servico nftables desconhecido: '$state'"; return 1 ;;
+  esac
+  # Troca: o snapshot antigo so sai depois que o novo esta no lugar.
+  rm -rf -- "$GUARD_DIR/snapshot.prev"
+  if [ -d "$GUARD_DIR/snapshot" ]; then mv -- "$GUARD_DIR/snapshot" "$GUARD_DIR/snapshot.prev" || return 1; fi
+  if ! mv -- "$s" "$GUARD_DIR/snapshot"; then
+    [ -d "$GUARD_DIR/snapshot.prev" ] && mv -- "$GUARD_DIR/snapshot.prev" "$GUARD_DIR/snapshot"
+    return 1
+  fi
+  rm -rf -- "$GUARD_DIR/snapshot.prev"
 }
 
 # Restaura o snapshot. Continua mesmo se um passo falhar e devolve !=0 se algum falhou.
+# Firewall: UMA transacao nft (cria + apaga + recarrega no mesmo arquivo), sem janela
+# em que a tabela fique ausente.
 guard_restore() {
-  local s="$GUARD_DIR/snapshot" rc=0
+  local s="$GUARD_DIR/snapshot" rc=0 tx="$GUARD_DIR/restore.nft"
   [ -d "$s" ] || { guard_log "ERRO: sem snapshot para restaurar"; return 1; }
   # SSH
-  if [ -f "$s/sshd-dropin.conf" ]; then cp -a -- "$s/sshd-dropin.conf" "$SSHD_DROPIN"; else rm -f -- "$SSHD_DROPIN"; fi
+  if [ -f "$s/sshd-dropin.conf" ]; then
+    cp -a -- "$s/sshd-dropin.conf" "$SSHD_DROPIN" || { guard_log "ERRO: copiar drop-in do SSH"; rc=1; }
+  else
+    rm -f -- "$SSHD_DROPIN" || { guard_log "ERRO: remover drop-in do SSH"; rc=1; }
+  fi
   if sshd -t; then
     systemctl reload ssh || { guard_log "ERRO: reload do ssh falhou"; rc=1; }
   else
@@ -53,15 +74,21 @@ guard_restore() {
     guard_log "ERRO: sshd -t reprovou o snapshot; removendo o drop-in"
     rm -f -- "$SSHD_DROPIN"; systemctl reload ssh || true; rc=1
   fi
-  # Firewall (arquivo + estado em memoria + servico)
-  if [ -f "$s/nftables.conf" ]; then cp -a -- "$s/nftables.conf" "$NFT_CONF"; fi
-  "$NFT_BIN" delete table inet homelab_fw 2>/dev/null || true
-  if [ -f "$s/runtime-present" ]; then
-    { echo "table inet homelab_fw"; echo "delete table inet homelab_fw"; cat "$s/runtime.nft"; } > "$GUARD_DIR/restore.nft"
-    "$NFT_BIN" -f "$GUARD_DIR/restore.nft" || { guard_log "ERRO: falha ao recarregar as regras anteriores"; rc=1; }
+  # Firewall em memoria: transacao unica.
+  if { echo "table inet homelab_fw"; echo "delete table inet homelab_fw"
+       if [ -f "$s/runtime-present" ]; then cat -- "$s/runtime.nft"; fi; } > "$tx"; then
+    "$NFT_BIN" -f "$tx" || { guard_log "ERRO: transacao nft de restauracao falhou (regras atuais mantidas)"; rc=1; }
+  else
+    guard_log "ERRO: nao foi possivel gravar $tx"; rc=1
   fi
-  if [ -f "$s/nft-enabled" ]; then systemctl enable nftables >/dev/null 2>&1 || rc=1
-  else systemctl disable nftables >/dev/null 2>&1 || true; fi
+  # Arquivo e servico
+  if [ -f "$s/nftables.conf" ]; then
+    cp -a -- "$s/nftables.conf" "$NFT_CONF" || { guard_log "ERRO: copiar nftables.conf"; rc=1; }
+  else
+    rm -f -- "$NFT_CONF" || rc=1
+  fi
+  if [ -f "$s/nft-enabled" ]; then systemctl enable nftables >/dev/null 2>&1 || { guard_log "ERRO: habilitar nftables"; rc=1; }
+  else systemctl disable nftables >/dev/null 2>&1 || { guard_log "ERRO: desabilitar nftables"; rc=1; }; fi
   guard_log "restauracao concluida (rc=$rc)"
   echo "$(date -Is) rc=$rc" > "$GUARD_DIR/last-rollback"
   return $rc
@@ -97,7 +124,13 @@ guard_check() {
     return 0
   fi
   guard_log "acesso NAO confirmado; restaurando o snapshot"
-  local rc=0; guard_restore || rc=$?
-  rm -f -- "$GUARD_DIR/armed"
-  return $rc
+  if guard_restore; then
+    rm -f -- "$GUARD_DIR/armed" "$GUARD_DIR/rollback-failed"
+    return 0
+  fi
+  # Restauracao incompleta: o guard NAO e desarmado. O "armed" fica, o homelab-apply
+  # recusa novas execucoes e a unidade termina com erro (visivel em systemctl --failed).
+  echo "$(date -Is) restauracao incompleta; ver $GUARD_DIR/guard.log" > "$GUARD_DIR/rollback-failed"
+  guard_log "CRITICO: restauracao incompleta; guard mantido armado. Verifique pelo console e so entao remova $GUARD_DIR/armed"
+  return 1
 }

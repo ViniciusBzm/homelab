@@ -10,12 +10,19 @@
 #   atomica sob lock exclusivo. O PC copia somente o export, sob lock compartilhado,
 #   e valida o manifesto: nunca copia um repositorio no meio de um prune.
 set -uo pipefail
-# >>> hl-env: HL_* so valem no sandbox de testes (namespace de usuario). Num root real
-# (mapa de uid identidade) toda variavel HL_* herdada e descartada: nada de PATH,
-# bibliotecas ou caminhos injetados pelo ambiente em scripts privilegiados.
-if grep -qE '^[[:space:]]*0[[:space:]]+0[[:space:]]+4294967295[[:space:]]*$' /proc/self/uid_map 2>/dev/null; then
-  for _hl_v in $(compgen -v HL_); do unset "$_hl_v"; done; unset _hl_v
+# >>> hl-env: HL_* so valem no sandbox de testes. Falha segura: os overrides so sao
+# mantidos se o processo estiver POSITIVAMENTE num namespace de usuario do tipo
+# "unshare -r" (uid_map de uma linha "0 <uid> 1"). Root real, uid_map ilegivel ou
+# qualquer falha => todas as HL_* herdadas sao descartadas. O grep usado e o do
+# caminho absoluto do sistema (nao depende do PATH herdado).
+_hl_keep=0
+if [ -r /proc/self/uid_map ] && [ -x /usr/bin/grep ] \
+   && /usr/bin/grep -qxE '[[:space:]]*0[[:space:]]+[1-9][0-9]*[[:space:]]+1[[:space:]]*' /proc/self/uid_map 2>/dev/null \
+   && [ "$(/usr/bin/grep -c '' /proc/self/uid_map 2>/dev/null)" = 1 ]; then
+  _hl_keep=1
 fi
+if [ "$_hl_keep" != 1 ]; then for _hl_v in $(compgen -v HL_); do unset "$_hl_v"; done; fi
+unset _hl_keep _hl_v
 # <<< hl-env
 export PATH=${HL_PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}
 HL_LIB_DIR=${HL_LIB_DIR:-$(dirname -- "$(readlink -f -- "$0")")/lib}
@@ -76,7 +83,8 @@ stop_services() {
   [ ${#want[@]} -eq 0 ] && { echo "nenhum servico a pausar"; return 0; }
   STOPPED=("${want[@]}")   # registra ANTES: mesmo uma parada parcial sera religada
   compose stop "${want[@]}" >/dev/null 2>&1 || { echo "docker compose stop falhou"; return 1; }
-  running=$(running_services)
+  # Uma consulta que falha NAO confirma a parada.
+  if ! running=$(running_services); then echo "consulta ao Docker falhou apos o stop: parada nao confirmada"; return 1; fi
   for s in "${want[@]}"; do grep -qx -- "$s" <<< "$running" && { echo "$s continua rodando"; return 1; }; done
   echo "pausados: ${want[*]}"
 }
@@ -86,8 +94,13 @@ start_services() {
   local attempt s running missing
   for attempt in 1 2 3; do
     compose start "${STOPPED[@]}" >/dev/null 2>&1
-    running=$(running_services); missing=()
-    for s in "${STOPPED[@]}"; do grep -qx -- "$s" <<< "$running" || missing+=("$s"); done
+    missing=()
+    if running=$(running_services); then
+      for s in "${STOPPED[@]}"; do grep -qx -- "$s" <<< "$running" || missing+=("$s"); done
+    else
+      echo "consulta ao Docker falhou (tentativa $attempt): religamento nao confirmado"
+      missing=("${STOPPED[@]}")
+    fi
     if [ ${#missing[@]} -eq 0 ]; then echo "religados: ${STOPPED[*]}"; STOPPED=(); return 0; fi
     sleep "${HL_RETRY_SLEEP:-3}"
   done
@@ -102,23 +115,42 @@ finish_status() { # $1 ok|fail  $2 mensagem
   if [ "$1" = ok ]; then push up "$2"; else push down "backup falhou: $2"; fi
 }
 
+# Promocao isolada (o gancho de teste so existe no sandbox: HL_* e descartado em producao).
+promote_export() { [ -z "${HL_TEST_FAIL_PROMOTE:-}" ] || return 1; mv -- "$1" "$2"; }
+
 publish_export() {
-  local new old efd
+  local new old efd leftover
   # Lock legivel pelo administrador (a copia "pull" segura um lock compartilhado nele).
   [ -f "$EXPORT_LOCK" ] && [ ! -L "$EXPORT_LOCK" ] || { rm -f -- "$EXPORT_LOCK"; install -m 0644 -o root -g root /dev/null "$EXPORT_LOCK"; }
   exec {efd}<"$EXPORT_LOCK"
   flock -x -w "${HL_EXPORT_LOCK_WAIT:-600}" "$efd" || { echo "export ocupado por uma copia em andamento"; return 1; }
+  # Recupera uma troca interrompida (ex.: queda de energia entre os dois "mv").
+  if [ ! -d "$EXPORT_DIR" ]; then
+    leftover=$(ls -1dt -- "$EXPORT_DIR".old.* 2>/dev/null | head -1)
+    [ -n "$leftover" ] && mv -- "$leftover" "$EXPORT_DIR" && echo "geracao anterior recuperada de $leftover"
+  fi
+  rm -rf -- "$EXPORT_DIR".new.*
   new="$EXPORT_DIR.new.$$"; old="$EXPORT_DIR.old.$$"
-  rm -rf -- "$new"
-  cp -al -- "$RESTIC_REPOSITORY" "$new" || return 1
+  cp -al -- "$RESTIC_REPOSITORY" "$new" || { rm -rf -- "$new"; return 1; }
   find "$new/locks" -mindepth 1 -delete 2>/dev/null || true
-  ( cd -- "$new" && find . -type f ! -name MANIFEST.sha256 ! -name GENERATION -print0 | sort -z | xargs -0 -r sha256sum > MANIFEST.sha256 ) || return 1
-  echo "$SNAP $(date -Is)" > "$new/GENERATION"
-  chgrp -R -- "$EXPORT_GROUP" "$new" && find "$new" -type d -exec chmod 2750 {} + && find "$new" -type f -exec chmod 0440 {} + || return 1
-  [ -d "$EXPORT_DIR" ] && mv -- "$EXPORT_DIR" "$old"
-  mv -- "$new" "$EXPORT_DIR" || return 1
+  if ! ( cd -- "$new" && find . -type f ! -name MANIFEST.sha256 ! -name GENERATION -print0 | sort -z | xargs -0 -r sha256sum > MANIFEST.sha256 ) \
+     || ! echo "$SNAP $(date -Is)" > "$new/GENERATION" \
+     || ! { chgrp -R -- "$EXPORT_GROUP" "$new" && find "$new" -type d -exec chmod 2750 {} + && find "$new" -type f -exec chmod 0440 {} +; }; then
+    echo "falha ao montar a nova geracao; export anterior mantido"; rm -rf -- "$new"; return 1
+  fi
+  [ -z "${HL_TEST_CORRUPT_NEW_EXPORT:-}" ] || sed -i '1s/^[0-9a-f]\{64\}/0000000000000000000000000000000000000000000000000000000000000000/' "$new/MANIFEST.sha256"
+  # Valida a NOVA geracao antes de promover.
+  if [ ! -s "$new/MANIFEST.sha256" ] || ! ( cd -- "$new" && sha256sum -c --quiet --strict MANIFEST.sha256 >/dev/null 2>&1 ); then
+    echo "nova geracao reprovada na validacao; export anterior mantido"; rm -rf -- "$new"; return 1
+  fi
+  # Promove; se falhar, devolve a geracao anterior ao lugar.
+  if [ -d "$EXPORT_DIR" ]; then mv -- "$EXPORT_DIR" "$old" || { rm -rf -- "$new"; return 1; }; fi
+  if ! promote_export "$new" "$EXPORT_DIR"; then
+    echo "falha ao promover a nova geracao; restaurando a anterior"
+    if [ -d "$old" ]; then mv -- "$old" "$EXPORT_DIR" || echo "CRITICO: geracao anterior ficou em $old"; fi
+    rm -rf -- "$new"; return 1
+  fi
   rm -rf -- "$old"
-  ( cd -- "$EXPORT_DIR" && sha256sum -c --quiet MANIFEST.sha256 ) || return 1
   exec {efd}<&-
   echo "export publicado: $(wc -l < "$EXPORT_DIR/MANIFEST.sha256") arquivos"
 }

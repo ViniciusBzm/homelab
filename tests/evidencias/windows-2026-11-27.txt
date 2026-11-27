@@ -1,4 +1,4 @@
-### Suite Windows (2026-11-27T13:19:01, Windows PowerShell 5.1.26100.9818)
+### Suite Windows (2026-11-27T13:37:04, Windows PowerShell 5.1.26100.9818)
   PASSOU manifesto valido e aceito
   PASSOU arquivo alterado e rejeitado
   PASSOU arquivo ausente e rejeitado
@@ -8,6 +8,8 @@
   PASSOU caminho com .. e rejeitado
   PASSOU manifesto vazio e rejeitado
   PASSOU rotacao mantem atual e anterior
+  PASSOU rotacao que falha preserva a copia atual e a anterior
+  PASSOU pull exclusivo: segunda execucao nao obtem o lock
   PASSOU pull nao usa scp do repositorio vivo
 
-Resultado: 10 passaram, 0 falharam
+Resultado: 12 passaram, 0 falharam

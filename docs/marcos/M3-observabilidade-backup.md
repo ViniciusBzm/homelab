@@ -140,7 +140,7 @@ A revisão apontou 9 pontos. As correções estão no repositório e testadas em
 | 8 | Chave de recuperação | Testar **a cópia externa** antes de apagar a local | [recuperação](../recuperacao.md) |
 | 9 | Privacidade do ntfy e limites do monitoramento | Documentados | ADR-003 |
 
-**Testes:** [`tests/`](../../tests/). Servidor **48/48** em sandbox (`unshare -rnm`, nft real em rede isolada, restic real) e Windows **10/10**: **58 aprovados**. Evidências em [`tests/evidencias/`](../../tests/evidencias/).
+**Testes:** [`tests/`](../../tests/). Servidor **58/58** em sandbox (`unshare -rnm`, nft real em rede isolada, restic real) e Windows **12/12**: **70 aprovados** (rodada final; os testes de regressão falham no código anterior). Migração proposta: [`docs/migracao-pr2.md`](../migracao-pr2.md). Evidências em [`tests/evidencias/`](../../tests/evidencias/).
 
 **Variáveis de teste não abrem brecha em produção:** os caminhos `HL_*`/`HL_PATH`, usados pelos testes, só valem dentro de um namespace de usuário. Num root real, o bloco `hl-env` de cada script apaga todas elas antes de definir o `PATH` fixo. Isso foi comprovado no namespace real do servidor com `HL_PATH=/maligno` (detalhes em [`tests/README.md`](../../tests/README.md)).
 

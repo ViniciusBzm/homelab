@@ -21,7 +21,7 @@ Não é preciso privilégio: a suíte **não usa sudo** e não altera o sistema.
 - Os scripts aceitam caminhos `HL_*` e `HL_PATH` **somente** dentro de um namespace de usuário (veja abaixo). A suíte **aborta antes do primeiro teste** se algum comando de sistema não resolver para o mock, ou se algum script não respeitar `HL_PATH`.
 
 ## `HL_*` não é vetor de injeção em produção
-Cada script privilegiado começa com o bloco `hl-env`. Se `/proc/self/uid_map` for o mapa identidade (`0 0 4294967295`, ou seja, root de verdade no namespace inicial), **toda** variável `HL_*` herdada é apagada antes de definir o `PATH` fixo. São duas camadas:
+Cada script privilegiado começa com o bloco `hl-env`. **Falha segura:** as `HL_*` só são mantidas se o processo estiver **positivamente** num namespace de usuário do tipo `unshare -r` (`uid_map` de uma linha `0 <uid> 1`), verificado com `/usr/bin/grep` por caminho absoluto, sem depender do `PATH` herdado. Root real, `uid_map` ilegível, mapa diferente ou qualquer falha: **toda** `HL_*` herdada é apagada antes do `PATH` fixo. São duas camadas:
 1. O `sudo` do Debian (`env_reset`) já não repassa `HL_*`.
 2. O bloco `hl-env` cobre `sudo -E`, `sudo VAR=valor cmd`, shells de root e o systemd.
 
@@ -39,7 +39,7 @@ Na primeira execução, os scripts tinham `export PATH=/usr/local/sbin:…` fixo
 ## Evidências
 | Arquivo | Conteúdo |
 |---|---|
-| [`evidencias/servidor-2026-11-27.txt`](evidencias/servidor-2026-11-27.txt) | Suíte de servidor **48/48** (Debian 12, kernel 6.1.0-56, restic 0.14.0, nftables 1.0.6) + prova do `hl-env` no namespace real |
-| [`evidencias/windows-2026-11-27.txt`](evidencias/windows-2026-11-27.txt) | Suíte Windows **10/10** (Windows PowerShell 5.1) |
+| [`evidencias/servidor-2026-11-27.txt`](evidencias/servidor-2026-11-27.txt) | Suíte de servidor **58/58** (Debian 12, kernel 6.1.0-56, restic 0.14.0, nftables 1.0.6) + prova do `hl-env` no namespace real |
+| [`evidencias/windows-2026-11-27.txt`](evidencias/windows-2026-11-27.txt) | Suíte Windows **12/12** (Windows PowerShell 5.1) |
 
-**Total: 58 testes aprovados.** São testes em **sandbox**; o que já está implantado no servidor está descrito em [M3](../docs/marcos/M3-observabilidade-backup.md).
+**Total: 70 testes aprovados** (58 servidor + 12 Windows). Os 11 testes de regressão da revisão final **falham no código anterior** (`f4b9029`) e passam no atual: [`evidencias/regressao-contra-f4b9029.txt`](evidencias/regressao-contra-f4b9029.txt). São testes em **sandbox**; o que já está implantado no servidor está descrito em [M3](../docs/marcos/M3-observabilidade-backup.md).
