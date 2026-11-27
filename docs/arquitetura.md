@@ -33,7 +33,8 @@ flowchart TD
 - Em reinicializações do Wyse, houve episódios de SSH funcional, mas **sem internet externa** no servidor.
 - O serviço de compartilhamento do Windows continuava ativo; reiniciá-lo pelo PowerShell não solucionou o problema.
 - **Solução temporária observada:** desligar e religar a opção de compartilhamento na interface Wi-Fi do Windows, restaurando a navegação do Wyse nas ocasiões testadas.
-- **PENDENTE:** identificar a causa-raiz e confirmar uma recuperação automática sem intervenção.
+- **CONFIRMADO (26/11/2026):** a causa-raiz é o ICS não persistir após reiniciar (falta de `EnableRebootPersistConnection`, KB4055559) somado a um estado "configurado mas sem NAT/DNS". A correção foi o valor no Registro, o serviço em Automático e um watchdog agendado que testa o DNS do ICS e reaplica o compartilhamento. Detalhes no [M2](marcos/M2-rede-seguranca-automacao.md).
+- **PENDENTE DE VALIDAÇÃO:** recuperação automática depois de reiniciar o PC Windows.
 
 O problema de internet do ICS não deve ser confundido com o estado do daemon SSH ou com falha do Docker. O repositório não publica endereços internos, nomes de usuário, MACs nem credenciais.
 
@@ -42,6 +43,7 @@ O problema de internet do ICS não deve ser confundido com o estado do daemon SS
 - Nenhuma porta de container foi publicada nos experimentos.
 - Nenhum encaminhamento de porta da internet foi configurado para este projeto.
 - A administração é feita por SSH em rede privada, com monitor e teclado locais disponíveis durante mudanças arriscadas.
+- **Desde o M2:** SSH só por chave pública e root bloqueado; firewall `nftables` com política drop na entrada (SSH aceito só de faixas privadas); atualizações automáticas de segurança.
 - Não foi comprovada disponibilidade contínua ou retorno automático da internet após cada reinício.
 - As versões e medições são específicas das sessões; não são monitoramento em tempo real.
 

@@ -9,7 +9,7 @@
 |---|---|---|
 | **M0 — Base Linux e SSH** | Debian, boot texto, acesso SSH e medições | **CONFIRMADO** para a configuração testada; rede externa pós-boot ainda falha intermitentemente |
 | **M1 — Docker e containers** | Docker Engine, Compose, teste, métricas e limpeza | **PENDENTE DE VALIDAÇÃO** do retorno do serviço após reboot; primeiros experimentos **CONFIRMADOS** |
-| **M2 — Rede previsível** | Eliminar, se viável, dependência do ICS e validar comunicação após boot | **PLANEJADO** |
+| **M2 — Rede previsível e segurança base** | Causa-raiz e correção do ICS, hora, SSH só por chave, firewall, atualizações automáticas ([registro](marcos/M2-rede-seguranca-automacao.md)) | **CONFIRMADO** na sessão; **PENDENTE DE VALIDAÇÃO** após reiniciar o PC e o Wyse |
 | **M3 — Observabilidade e recuperação** | Checks úteis, logs, alertas pontuais e backup testado | **PLANEJADO** |
 | **M4 — Aplicações e automação** | API/serviço pequeno, deployment controlado e diagnóstico | **PLANEJADO** |
 | **M5 — WristOps** | Prova de conceito de consulta de dados do lab por relógio | **PLANEJADO** |
