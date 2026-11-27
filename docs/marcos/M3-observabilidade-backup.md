@@ -125,6 +125,42 @@ Dois monitores temporários foram criados e depois apagados:
 
 As duas mensagens aparecem no histórico do tópico ntfy. Esse segundo caminho é o mesmo do alerta de **backup atrasado**.
 
+## Revisão técnica do PR #2 (27/11/2026): correções propostas, **não aplicadas no servidor**
+A revisão apontou 9 pontos. As correções estão no repositório e testadas em sandbox; o servidor segue com a versão anterior, validada acima, até a aplicação ser autorizada.
+
+| # | Ponto | Correção | Registro |
+|---|---|---|---|
+| 1 | Consistência da cópia externa | Lock único backup/restauração/prune; **export imutável** com manifesto, trocado sob lock; pull com `flock -s` + validação do manifesto | ADR-004 |
+| 2 | Logs, temporários e configs de root | Logs em `/var/log/homelab`; config lida sem `source` e com dono/modo verificados; `mktemp`; URL de push não confiável | ADR-007, ADR-004 |
+| 3 | Parar/religar contêineres | Registro antes do `stop`, religamento garantido, falha se não voltarem | ADR-004 |
+| 4 | Falso positivo na restauração externa | `--verify`, contagem igual à do snapshot, `PRAGMA integrity_check` nos bancos | ADR-004 |
+| 5 | Códigos de saída | `hl_finish` em todos os scripts | ADR-007 |
+| 6 | Firewall: sub-rede, IPv6, portas do Docker | `firewall.conf` com `ALLOWED_V4/V6`; IPv6 e docker-proxy cobertos | ADR-002 |
+| 7 | Rollback: falhas parciais e concorrência | Lock, recusa com pendência, reversão imediata, snapshot em memória | ADR-007 |
+| 8 | Chave de recuperação | Testar **a cópia externa** antes de apagar a local | [recuperação](../recuperacao.md) |
+| 9 | Privacidade do ntfy e limites do monitoramento | Documentados | ADR-003 |
+
+**Testes:** [`tests/`](../../tests/). Servidor **48/48** em sandbox (`unshare -rnm`, nft real em rede isolada, restic real) e Windows **10/10**: **58 aprovados**. Evidências em [`tests/evidencias/`](../../tests/evidencias/).
+
+**Variáveis de teste não abrem brecha em produção:** os caminhos `HL_*`/`HL_PATH`, usados pelos testes, só valem dentro de um namespace de usuário. Num root real, o bloco `hl-env` de cada script apaga todas elas antes de definir o `PATH` fixo. Isso foi comprovado no namespace real do servidor com `HL_PATH=/maligno` (detalhes em [`tests/README.md`](../../tests/README.md)).
+
+**Incidente durante os testes (registrado por transparência):** na primeira execução, o `export PATH` fixo dos scripts anulou os mocks, e alguns testes chamaram o `systemctl`/`systemd-run` reais. O host **negou** as chamadas (polkit: "Interactive authentication required"), porque o namespace não tem privilégio real. Os hashes e datas de `sshd_config.d` e `nftables.conf`, os serviços e os contêineres foram conferidos e estavam **inalterados**. Correção: `HL_PATH` respeitado só no sandbox, uma trava que aborta a suíte se algum comando não resolver para o mock, um teste que prova o uso dos mocks e um `tmpfs` privado em `/tmp`.
+
+### O que está testado em sandbox × o que está implantado no servidor
+| Item | Implantado no servidor (27/11, validado acima) | Correção do PR #2 |
+|---|---|---|
+| Cópia externa | `scp -r` do repositório vivo | Export imutável + manifesto + `flock`: **testado em sandbox, NÃO implantado** |
+| Pausa/religamento no backup | Versão anterior (religamento sem verificação) | **Testado em sandbox, NÃO implantado** |
+| Restauração (local e externa) | Comparação de configs + tamanho dos dados | `--verify`, contagem e `integrity_check`: **testado em sandbox, NÃO implantado** |
+| Firewall | Todas as faixas RFC 1918; portas 8090/3001 | Sub-rede autorizada + IPv6: **testado em sandbox (nft real), NÃO implantado** |
+| Guard | Snapshot de arquivos, sem lock | Lock, recusa com pendência, reversão imediata, snapshot em memória: **testado em sandbox, NÃO implantado** |
+| Logs de root | Na home do administrador | `/var/log/homelab`: **testado em sandbox, NÃO implantado** |
+| Guarda `hl-env` | Não se aplica (versão anterior não lia `HL_*`) | **Testada em sandbox e no namespace real; NÃO implantada** |
+| Cópia pull no Windows | Tarefa atual (`scp`) | Novo script/módulo: **testado no Windows (10/10); tarefa NÃO alterada** |
+| Documentação (chave de recuperação, ntfy, limites) | — | Publicada |
+
+A implantação exige sudo no servidor (com guard) e reinstalar a tarefa do Windows, e depende de autorização após a revisão técnica.
+
 ## Pendente
 
 | Item | Estado |

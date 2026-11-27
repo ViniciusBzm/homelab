@@ -8,3 +8,4 @@
 | [004](ADR-004-backup-restic-pull.md) | Backup com restic local e cópia "pull" pelo PC | Aceita |
 | [005](ADR-005-sem-ansible-por-enquanto.md) | Scripts idempotentes em vez de Ansible (por enquanto) | Aceita |
 | [006](ADR-006-sudo-com-senha.md) | Sudo continua exigindo senha; tarefas de root em lote | Aceita |
+| [007](ADR-007-guard-concorrencia-falhas-parciais.md) | Guard com lock, recusa com pendência, reversão imediata; logs de root seguros | Proposta (PR #2) |

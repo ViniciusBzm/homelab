@@ -1,0 +1,2 @@
+#!/bin/bash
+S=${MOCK_STATE:?}; echo "systemd-run $*" >> "$S/calls"; exit "${MOCK_SYSTEMD_RUN_FAIL:-0}"

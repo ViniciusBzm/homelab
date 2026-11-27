@@ -1,152 +1,116 @@
 #!/bin/bash
 # HomeLab - configuracao administrativa do servidor (Debian 12). Idempotente.
 #
-# Uso: sudo bash homelab-apply.sh <usuario-admin> [--guard-minutes N] [--skip-upgrade]
+# Uso: sudo bash homelab-apply.sh <usuario-admin> [--guard-minutes N] [--skip-upgrade] [--only-ssh-firewall]
 #
-# Mudancas em SSH e firewall ficam protegidas por um "guard": antes de aplica-las,
-# o estado atual e salvo; se o acesso nao for confirmado (touch ~/.homelab-guard-confirm)
-# em N minutos (padrao 10), o estado salvo e restaurado automaticamente.
+# SSH e firewall sao protegidos por um guard: snapshot do estado atual, reversao
+# automatica em N minutos (padrao 10) sem confirmacao (touch ~/.homelab-guard-confirm)
+# e reversao IMEDIATA se qualquer passo de SSH/firewall falhar.
+# Uma unica execucao por vez (lock) e nenhuma nova enquanto um guard estiver pendente.
 set -u
 export DEBIAN_FRONTEND=noninteractive
-export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# >>> hl-env: HL_* so valem no sandbox de testes (namespace de usuario). Num root real
+# (mapa de uid identidade) toda variavel HL_* herdada e descartada: nada de PATH,
+# bibliotecas ou caminhos injetados pelo ambiente em scripts privilegiados.
+if grep -qE '^[[:space:]]*0[[:space:]]+0[[:space:]]+4294967295[[:space:]]*$' /proc/self/uid_map 2>/dev/null; then
+  for _hl_v in $(compgen -v HL_); do unset "$_hl_v"; done; unset _hl_v
+fi
+# <<< hl-env
+export PATH=${HL_PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}
+HL_LIB_DIR=${HL_LIB_DIR:-$(dirname -- "$(readlink -f -- "$0")")/lib}
+[ -f "$HL_LIB_DIR/guard.sh" ] || HL_LIB_DIR=/usr/local/lib/homelab
+# shellcheck source=lib/guard.sh
+. "$HL_LIB_DIR/guard.sh"
+# shellcheck source=lib/firewall.sh
+. "$HL_LIB_DIR/firewall.sh"
 
 ADMIN_USER="${1:-}"; shift || true
-GUARD_MINUTES=10; SKIP_UPGRADE=0
+GUARD_MINUTES=10; SKIP_UPGRADE=0; ONLY_SF=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --guard-minutes) GUARD_MINUTES="${2:?}"; shift 2 ;;
-    --skip-upgrade)  SKIP_UPGRADE=1; shift ;;
-    *) echo "opcao desconhecida: $1"; exit 2 ;;
+    --guard-minutes)     GUARD_MINUTES="${2:?}"; shift 2 ;;
+    --skip-upgrade)      SKIP_UPGRADE=1; shift ;;
+    --only-ssh-firewall) ONLY_SF=1; shift ;;
+    *) hl_die "opcao desconhecida: $1" 2 ;;
   esac
 done
-[ "$(id -u)" -eq 0 ] || { echo "Execute com sudo."; exit 1; }
-[ -n "$ADMIN_USER" ] && id "$ADMIN_USER" >/dev/null 2>&1 || { echo "uso: sudo bash $0 <usuario-admin> [--guard-minutes N] [--skip-upgrade]"; exit 2; }
-ADMIN_HOME=$(getent passwd "$ADMIN_USER" | cut -d: -f6)
-[ -s "$ADMIN_HOME/.ssh/authorized_keys" ] || { echo "ABORTADO: $ADMIN_USER nao tem authorized_keys; desligar senha trancaria o acesso."; exit 3; }
+[[ "$GUARD_MINUTES" =~ ^[0-9]+$ ]] && [ "$GUARD_MINUTES" -ge 1 ] || hl_die "--guard-minutes invalido" 2
+hl_require_root
+[ -n "$ADMIN_USER" ] && getent passwd "$ADMIN_USER" >/dev/null \
+  || hl_die "uso: sudo bash $0 <usuario-admin> [--guard-minutes N] [--skip-upgrade] [--only-ssh-firewall]" 2
+ADMIN_HOME=${HL_ADMIN_HOME:-$(getent passwd "$ADMIN_USER" | cut -d: -f6)}
+AUTH_KEYS="$ADMIN_HOME/.ssh/authorized_keys"
+[ -s "$AUTH_KEYS" ] && [ ! -L "$AUTH_KEYS" ] \
+  || hl_die "ABORTADO: $ADMIN_USER nao tem authorized_keys valido; desligar a senha trancaria o acesso." 3
+ETC_DIR=${HL_ETC_DIR:-/etc/homelab}
+CONFIRM="$ADMIN_HOME/.homelab-guard-confirm"
 
-# Log legivel pelo administrador (criado antes do redirecionamento: sem corrida de permissao)
-LOG="$ADMIN_HOME/homelab-apply.log"
-install -m 600 -o "$ADMIN_USER" -g "$ADMIN_USER" /dev/null "$LOG"
-exec > >(tee -a "$LOG") 2>&1
+hl_lock "${HL_RUN_DIR:-/run}/homelab-apply.lock"
+guard_pending && hl_die "ha um guard pendente ($GUARD_DIR/armed). Confirme o acesso (touch $CONFIRM) ou aguarde a reversao antes de reaplicar." 5
+HL_LOG_GROUP=${HL_LOG_GROUP:-$(id -gn "$ADMIN_USER")}
+hl_log_init homelab-apply
+echo "guard=${GUARD_MINUTES}min skip_upgrade=$SKIP_UPGRADE only_ssh_firewall=$ONLY_SF"
 
-FAILS=0
-section() { echo; echo "===== $* ====="; }
-ok()   { echo "[OK]    $*"; }
-fail() { echo "[FALHA] $*"; FAILS=$((FAILS+1)); }
-echo "Inicio: $(date -Is)  guard=${GUARD_MINUTES}min  skip_upgrade=$SKIP_UPGRADE"
-
-GUARD_DIR=/var/lib/homelab-guard
-SSHD_DROPIN=/etc/ssh/sshd_config.d/10-homelab-hardening.conf
-NFT_CONF=/etc/nftables.conf
-
-# ------------------------------------------------------------------ 1. Hora
-section "1. Hora (NTP + RTC)"
-install -d /etc/systemd/timesyncd.conf.d
-cat > /etc/systemd/timesyncd.conf.d/10-homelab.conf <<'EOF'
-# NTP.br primeiro (Brasil), pool Debian como reserva.
-[Time]
-NTP=a.st1.ntp.br b.st1.ntp.br c.st1.ntp.br
-FallbackNTP=0.debian.pool.ntp.org 1.debian.pool.ntp.org 2.debian.pool.ntp.org
-EOF
-systemctl restart systemd-timesyncd
-for _ in $(seq 1 20); do [ "$(timedatectl show -p NTPSynchronized --value)" = yes ] && break; sleep 2; done
-if [ "$(timedatectl show -p NTPSynchronized --value)" = yes ]; then
-  ok "NTP sincronizado: $(date -Is)"
-  hwclock --systohc --utc && ok "RTC gravado" || fail "hwclock --systohc"
-else
-  fail "NTP nao sincronizou (RTC nao alterado)"
-fi
-
-# ------------------------------------------------------------------ 2. Pacotes
-section "2. Atualizacoes"
-if [ "$SKIP_UPGRADE" -eq 1 ]; then
-  echo "pulado (--skip-upgrade)"
-else
-  apt-get update -q && ok "apt update" || fail "apt update"
-  apt-get -y -q -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold full-upgrade && ok "full-upgrade" || fail "full-upgrade"
-  apt-get -y -q install unattended-upgrades apt-listchanges && ok "unattended-upgrades" || fail "instalar unattended-upgrades"
-  apt-get -y -q autoremove --purge && ok "autoremove" || fail "autoremove"
-fi
-cat > /etc/apt/apt.conf.d/20auto-upgrades <<'EOF'
-APT::Periodic::Update-Package-Lists "1";
-APT::Periodic::Unattended-Upgrade "1";
-APT::Periodic::AutocleanInterval "7";
-EOF
-cat > /etc/apt/apt.conf.d/52homelab-unattended <<'EOF'
-// Somente seguranca (padrao Debian). Sem reboot automatico.
-Unattended-Upgrade::Automatic-Reboot "false";
-Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
-Unattended-Upgrade::Remove-Unused-Dependencies "true";
-EOF
-if command -v unattended-upgrade >/dev/null; then
-  unattended-upgrade --dry-run >/dev/null 2>&1 && ok "unattended-upgrade dry-run" || fail "unattended-upgrade dry-run"
-fi
-
-# ------------------------------------------------------------------ 3. Servicos
-section "3. Servicos desnecessarios num servidor"
-for s in cups.service cups-browsed.service cups.socket cups.path ModemManager.service bluetooth.service; do
-  if systemctl list-unit-files "$s" --no-legend 2>/dev/null | grep -q .; then
-    systemctl disable --now "$s" >/dev/null 2>&1 && ok "desativado: $s" || fail "desativar $s"
+if [ "$ONLY_SF" -eq 0 ]; then
+  # ---------------------------------------------------------------- 1. Hora
+  hl_section "1. Hora (NTP + RTC)"
+  install -d /etc/systemd/timesyncd.conf.d
+  printf '%s\n' '# NTP.br primeiro (Brasil), pool Debian como reserva.' '[Time]' \
+    'NTP=a.st1.ntp.br b.st1.ntp.br c.st1.ntp.br' \
+    'FallbackNTP=0.debian.pool.ntp.org 1.debian.pool.ntp.org 2.debian.pool.ntp.org' \
+    > /etc/systemd/timesyncd.conf.d/10-homelab.conf
+  systemctl restart systemd-timesyncd || hl_fail "reiniciar timesyncd"
+  for _ in $(seq 1 20); do [ "$(timedatectl show -p NTPSynchronized --value)" = yes ] && break; sleep 2; done
+  if [ "$(timedatectl show -p NTPSynchronized --value)" = yes ]; then
+    hl_ok "NTP sincronizado: $(date -Is)"; hwclock --systohc --utc && hl_ok "RTC gravado" || hl_fail "hwclock --systohc"
+  else
+    hl_fail "NTP nao sincronizou (RTC nao alterado)"
   fi
-done
 
-# ------------------------------------------------------------------ 4. Logs
-section "4. Limites de log (pendrive)"
-install -d /etc/systemd/journald.conf.d
-cat > /etc/systemd/journald.conf.d/10-homelab.conf <<'EOF'
-[Journal]
-SystemMaxUse=200M
-MaxRetentionSec=1month
-EOF
-systemctl restart systemd-journald && ok "journald 200M / 1 mes" || fail "journald"
-if [ ! -s /etc/docker/daemon.json ]; then
-  install -d /etc/docker
-  printf '{\n  "log-driver": "json-file",\n  "log-opts": { "max-size": "10m", "max-file": "3" }\n}\n' > /etc/docker/daemon.json
-  systemctl restart docker && ok "docker: rotacao de logs" || fail "reiniciar docker"
-else
-  echo "daemon.json existente preservado"
+  # ---------------------------------------------------------------- 2. Pacotes
+  hl_section "2. Atualizacoes"
+  if [ "$SKIP_UPGRADE" -eq 1 ]; then echo "pulado (--skip-upgrade)"; else
+    apt-get update -q && hl_ok "apt update" || hl_fail "apt update"
+    apt-get -y -q -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold full-upgrade && hl_ok "full-upgrade" || hl_fail "full-upgrade"
+    apt-get -y -q install unattended-upgrades apt-listchanges && hl_ok "unattended-upgrades" || hl_fail "instalar unattended-upgrades"
+    apt-get -y -q autoremove --purge && hl_ok "autoremove" || hl_fail "autoremove"
+  fi
+  printf '%s\n' 'APT::Periodic::Update-Package-Lists "1";' 'APT::Periodic::Unattended-Upgrade "1";' \
+    'APT::Periodic::AutocleanInterval "7";' > /etc/apt/apt.conf.d/20auto-upgrades
+  printf '%s\n' '// Somente seguranca (padrao Debian). Sem reboot automatico.' \
+    'Unattended-Upgrade::Automatic-Reboot "false";' 'Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";' \
+    'Unattended-Upgrade::Remove-Unused-Dependencies "true";' > /etc/apt/apt.conf.d/52homelab-unattended
+  if command -v unattended-upgrade >/dev/null; then
+    unattended-upgrade --dry-run >/dev/null 2>&1 && hl_ok "unattended-upgrade dry-run" || hl_fail "unattended-upgrade dry-run"
+  fi
+
+  # ---------------------------------------------------------------- 3. Servicos
+  hl_section "3. Servicos desnecessarios num servidor"
+  for s in cups.service cups-browsed.service cups.socket cups.path ModemManager.service bluetooth.service; do
+    if systemctl list-unit-files "$s" --no-legend 2>/dev/null | grep -q .; then
+      systemctl disable --now "$s" >/dev/null 2>&1 && hl_ok "desativado: $s" || hl_fail "desativar $s"
+    fi
+  done
+
+  # ---------------------------------------------------------------- 4. Logs
+  hl_section "4. Limites de log (pendrive)"
+  install -d /etc/systemd/journald.conf.d
+  printf '%s\n' '[Journal]' 'SystemMaxUse=200M' 'MaxRetentionSec=1month' > /etc/systemd/journald.conf.d/10-homelab.conf
+  systemctl restart systemd-journald && hl_ok "journald 200M / 1 mes" || hl_fail "journald"
+  if [ ! -s /etc/docker/daemon.json ]; then
+    install -d /etc/docker
+    printf '{\n  "log-driver": "json-file",\n  "log-opts": { "max-size": "10m", "max-file": "3" }\n}\n' > /etc/docker/daemon.json
+    systemctl restart docker && hl_ok "docker: rotacao de logs" || hl_fail "reiniciar docker"
+  else
+    echo "daemon.json existente preservado"
+  fi
 fi
 
 # ------------------------------------------------------------------ 5. Guard
-section "5. Guard: snapshot do estado atual + reversao em ${GUARD_MINUTES} min"
-install -d -m 700 "$GUARD_DIR"
-rm -rf "$GUARD_DIR/snapshot"; install -d -m 700 "$GUARD_DIR/snapshot"
-[ -f "$SSHD_DROPIN" ] && cp -a "$SSHD_DROPIN" "$GUARD_DIR/snapshot/sshd-dropin.conf"
-cp -a "$NFT_CONF" "$GUARD_DIR/snapshot/nftables.conf"
-systemctl is-enabled --quiet nftables && touch "$GUARD_DIR/snapshot/nft-enabled"
-cat > /usr/local/sbin/homelab-guard-rollback <<EOF
-#!/bin/bash
-# Restaura o snapshot de SSH/firewall se o acesso nao foi confirmado.
-S=$GUARD_DIR/snapshot; STAMP=$GUARD_DIR/armed; CONFIRM=$ADMIN_HOME/.homelab-guard-confirm
-if [ -f "\$CONFIRM" ] && [ "\$CONFIRM" -nt "\$STAMP" ]; then
-  logger -t homelab-guard "acesso confirmado; mudancas mantidas"; rm -f "\$STAMP" "\$CONFIRM"; exit 0
-fi
-logger -t homelab-guard "acesso NAO confirmado; restaurando snapshot"
-if [ -f "\$S/sshd-dropin.conf" ]; then cp -a "\$S/sshd-dropin.conf" $SSHD_DROPIN; else rm -f $SSHD_DROPIN; fi
-sshd -t && systemctl reload ssh
-cp -a "\$S/nftables.conf" $NFT_CONF
-nft delete table inet homelab_fw 2>/dev/null
-if [ -f "\$S/nft-enabled" ]; then nft -f $NFT_CONF; systemctl enable nftables; else systemctl disable nftables; fi
-echo "\$(date -Is) rollback executado" > $GUARD_DIR/last-rollback
-rm -f "\$STAMP"
-EOF
-chmod 755 /usr/local/sbin/homelab-guard-rollback
-systemctl stop homelab-guard.timer homelab-guard.service >/dev/null 2>&1
-systemctl reset-failed homelab-guard.timer homelab-guard.service >/dev/null 2>&1
-rm -f "$ADMIN_HOME/.homelab-guard-confirm"
-touch "$GUARD_DIR/armed"
-GUARD_OK=0
-if systemd-run --quiet --unit=homelab-guard --on-active="${GUARD_MINUTES}min" /usr/local/sbin/homelab-guard-rollback; then
-  GUARD_OK=1; ok "guard armado ($(date -d "+${GUARD_MINUTES} min" +%T))"
-else
-  fail "guard NAO armou: SSH e firewall nao serao alterados"
-fi
-
-# ------------------------------------------------------------------ 6. SSH
-section "6. SSH somente por chave"
-if [ "$GUARD_OK" -eq 1 ]; then
-  tmp=$(mktemp)
-  cat > "$tmp" <<EOF
+hl_section "5. Guard: snapshot + reversao em ${GUARD_MINUTES} min"
+TMPD=$(mktemp -d); trap 'rm -rf -- "$TMPD"' EXIT
+# Gera e valida TUDO antes de tocar em qualquer coisa.
+cat > "$TMPD/sshd.conf" <<EOF
 # HomeLab: somente chave publica. Protegido pelo homelab-guard.
 PasswordAuthentication no
 KbdInteractiveAuthentication no
@@ -159,95 +123,45 @@ LoginGraceTime 30
 ClientAliveInterval 300
 ClientAliveCountMax 2
 EOF
-  install -m 644 "$tmp" "$SSHD_DROPIN"; rm -f "$tmp"
-  if sshd -t; then
-    systemctl reload ssh && ok "sshd recarregado (sessoes atuais mantidas)" || fail "reload ssh"
-  else
-    fail "sshd -t reprovou; restaurando snapshot"
-    if [ -f "$GUARD_DIR/snapshot/sshd-dropin.conf" ]; then cp -a "$GUARD_DIR/snapshot/sshd-dropin.conf" "$SSHD_DROPIN"; else rm -f "$SSHD_DROPIN"; fi
-  fi
+if ! fw_render_from_conf "$ETC_DIR" > "$TMPD/nftables.conf"; then
+  hl_fail "configuracao do firewall invalida ($ETC_DIR/firewall.conf); nada foi alterado"; hl_finish
 fi
+"$NFT_BIN" -c -f "$TMPD/nftables.conf" || { hl_fail "nft -c reprovou o ruleset gerado; nada foi alterado"; hl_finish; }
+guard_snapshot && hl_ok "snapshot do estado atual" || { hl_fail "snapshot"; hl_finish; }
+guard_arm "$GUARD_MINUTES" "$CONFIRM" && hl_ok "guard armado ($(date -d "+${GUARD_MINUTES} min" +%T))" \
+  || { hl_fail "guard NAO armou: SSH e firewall nao foram alterados"; hl_finish; }
+
+# Qualquer falha (ou interrupcao) daqui ate o fim restaura o snapshot na hora.
+ROLLBACK_DONE=0
+rollback_now() {
+  [ "$ROLLBACK_DONE" -eq 1 ] && return; ROLLBACK_DONE=1
+  echo "!!! falha durante SSH/firewall: restaurando o estado anterior agora"
+  guard_restore && hl_ok "estado anterior restaurado" || hl_fail "restauracao incompleta: verifique pelo console"
+  guard_disarm
+}
+trap 'rollback_now; rm -rf -- "$TMPD"; exit 130' INT TERM HUP
+
+# ------------------------------------------------------------------ 6. SSH
+hl_section "6. SSH somente por chave"
+install -m 0644 "$TMPD/sshd.conf" "$SSHD_DROPIN"
+if sshd -t && systemctl reload ssh; then hl_ok "sshd validado e recarregado (sessoes atuais mantidas)"
+else hl_fail "SSH: validacao ou reload falhou"; rollback_now; hl_finish; fi
 
 # ------------------------------------------------------------------ 7. Firewall
-section "7. Firewall nftables (entrada + portas publicadas do Docker)"
-if [ "$GUARD_OK" -eq 1 ]; then
-  tmp=$(mktemp)
-  cat > "$tmp" <<'EOF'
-#!/usr/sbin/nft -f
-# HomeLab firewall. Sem "flush ruleset": preserva as tabelas do Docker.
-table inet homelab_fw
-delete table inet homelab_fw
-
-table inet homelab_fw {
-  set lan4 { type ipv4_addr; flags interval; elements = { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } }
-
-  # Portas publicadas pelo Docker (porta do HOST) liberadas para a rede local.
-  # Vazio = nenhuma porta publicada acessivel. Ex.: elements = { 8080, 3000 }
-  set docker_lan_tcp { type inet_service; }
-  set docker_lan_udp { type inet_service; }
-
-  chain input {
-    type filter hook input priority filter; policy drop;
-    iif "lo" accept
-    ct state established,related accept
-    ct state invalid drop
-    meta l4proto { icmp, ipv6-icmp } accept
-    iifname "docker0" accept
-    iifname "br-*" accept
-    ip saddr @lan4 tcp dport 22 accept comment "SSH so da rede local"
-    ip6 saddr fe80::/10 tcp dport 22 accept
-    ip saddr @lan4 udp dport 5353 accept comment "mDNS"
-    ip6 saddr fe80::/10 udp dport 5353 accept
-    udp sport 67 udp dport 68 accept comment "cliente DHCP"
-    udp sport 547 udp dport 546 accept comment "cliente DHCPv6"
-    limit rate 5/minute log prefix "homelab_fw drop: " level info
-    counter drop
-  }
-
-  # Roda antes do Docker (priority filter - 10): um drop aqui e definitivo.
-  chain forward {
-    type filter hook forward priority filter - 10; policy accept;
-    ct state established,related accept
-    iifname "docker0" accept
-    iifname "br-*" accept
-    ct status dnat oifname "docker0" jump docker_published
-    ct status dnat oifname "br-*" jump docker_published
-  }
-
-  chain docker_published {
-    ip saddr @lan4 meta l4proto tcp ct original proto-dst @docker_lan_tcp accept
-    ip saddr @lan4 meta l4proto udp ct original proto-dst @docker_lan_udp accept
-    limit rate 5/minute log prefix "homelab_fw docker drop: " level info
-    counter drop
-  }
-}
-EOF
-  # Portas publicadas liberadas para a LAN: /etc/homelab/docker-lan-tcp (ex.: "8090,3001")
-  LAN_TCP=$(tr -cd '0-9,' < /etc/homelab/docker-lan-tcp 2>/dev/null | sed 's/^,*//; s/,*$//')
-  if [ -n "$LAN_TCP" ]; then
-    sed -i "s|set docker_lan_tcp { type inet_service; }|set docker_lan_tcp { type inet_service; elements = { $LAN_TCP } }|" "$tmp"
-    echo "portas Docker liberadas para a LAN: $LAN_TCP"
-  fi
-  if nft -c -f "$tmp"; then
-    install -m 755 "$tmp" "$NFT_CONF"
-    nft -f "$NFT_CONF" && systemctl enable nftables >/dev/null 2>&1 && ok "firewall ativo e habilitado no boot" || fail "carregar firewall"
-    iptables -S DOCKER >/dev/null 2>&1 && ok "regras do Docker preservadas" || fail "cadeia DOCKER ausente"
-  else
-    fail "nft -c reprovou; firewall atual mantido"
-  fi
-  rm -f "$tmp"
+hl_section "7. Firewall nftables (sub-rede autorizada, IPv6, portas do Docker)"
+install -m 0755 "$TMPD/nftables.conf" "$NFT_CONF"
+if "$NFT_BIN" -f "$NFT_CONF" && systemctl enable nftables >/dev/null 2>&1; then
+  hl_ok "firewall carregado e habilitado no boot"
+  grep -E '^\s*set (allowed4|allowed6|docker_lan_tcp)' "$NFT_CONF" | sed 's/^ */  /'
+else
+  hl_fail "firewall: falha ao carregar"; rollback_now; hl_finish
 fi
+if iptables -S DOCKER >/dev/null 2>&1; then hl_ok "regras do Docker preservadas"; else echo "aviso: cadeia DOCKER ausente (Docker parado?)"; fi
+trap 'rm -rf -- "$TMPD"' INT TERM HUP
 
 # ------------------------------------------------------------------ 8. Resumo
-section "8. Resumo"
-apt list --upgradable 2>/dev/null | tail -n +2 | sed 's/^/pendente: /'
+hl_section "8. Resumo"
 [ -f /var/run/reboot-required ] && echo "REBOOT NECESSARIO" || echo "reboot nao necessario"
 echo "kernel: $(uname -r)"
-systemctl --failed --no-legend
-echo "Fim: $(date -Is)  falhas=$FAILS"
-if [ "$GUARD_OK" -eq 1 ]; then
-  echo "APLICACAO_CONCLUIDA - confirme o acesso em ate ${GUARD_MINUTES} min: touch ~/.homelab-guard-confirm"
-else
-  echo "APLICACAO_CONCLUIDA_SEM_SSH_FIREWALL"
-fi
-exit $(( FAILS > 0 ? 1 : 0 ))
+echo "APLICACAO_CONCLUIDA - confirme o acesso em ate ${GUARD_MINUTES} min: touch ~/.homelab-guard-confirm"
+hl_finish

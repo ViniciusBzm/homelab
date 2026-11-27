@@ -10,14 +10,22 @@
 # D) Porta publicada: bloqueada por padrao; liberada so ao entrar em docker_lan_tcp.
 #    Marcadores "@@MARK" no log permitem que um cliente externo teste cada fase.
 set -u
-export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# >>> hl-env: HL_* so valem no sandbox de testes (namespace de usuario). Num root real
+# (mapa de uid identidade) toda variavel HL_* herdada e descartada: nada de PATH,
+# bibliotecas ou caminhos injetados pelo ambiente em scripts privilegiados.
+if grep -qE '^[[:space:]]*0[[:space:]]+0[[:space:]]+4294967295[[:space:]]*$' /proc/self/uid_map 2>/dev/null; then
+  for _hl_v in $(compgen -v HL_); do unset "$_hl_v"; done; unset _hl_v
+fi
+# <<< hl-env
+export PATH=${HL_PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}
 ADMIN_USER="${1:?uso: sudo bash $0 <usuario-admin> [homelab-apply.sh]}"
 APPLY="${2:-$(dirname "$(readlink -f "$0")")/homelab-apply.sh}"
 [ "$(id -u)" -eq 0 ] || { echo "Execute com sudo."; exit 1; }
 [ -f "$APPLY" ] || { echo "homelab-apply.sh nao encontrado: $APPLY"; exit 2; }
 ADMIN_HOME=$(getent passwd "$ADMIN_USER" | cut -d: -f6)
-LOG="$ADMIN_HOME/homelab-postboot.log"
-install -m 600 -o "$ADMIN_USER" -g "$ADMIN_USER" /dev/null "$LOG"
+LOG_DIR=/var/log/homelab; install -d -m 0750 -o root -g "$(id -gn "$ADMIN_USER")" "$LOG_DIR"
+LOG="$LOG_DIR/homelab-postboot.log"; rm -f -- "$LOG"
+install -m 0640 -o root -g "$(id -gn "$ADMIN_USER")" /dev/null "$LOG"
 exec > >(tee -a "$LOG") 2>&1
 
 FAILS=0
@@ -32,7 +40,7 @@ echo "Inicio: $(date -Is)  kernel=$(uname -r)"
 # ------------------------------------------------------------------ A
 section "A. Teste do rollback (guard de 2 min, sem confirmacao)"
 H0=$(state_hash); echo "estado anterior:  $H0"
-bash "$APPLY" "$ADMIN_USER" --guard-minutes 2 --skip-upgrade >/dev/null 2>&1
+bash "$APPLY" "$ADMIN_USER" --guard-minutes 2 --only-ssh-firewall >/dev/null 2>&1
 H1=$(state_hash); echo "estado aplicado:  $H1"
 nft list chain inet homelab_fw forward >/dev/null 2>&1 && echo "regras novas carregadas (cadeia forward presente)"
 mark ROLLBACK_WAIT
@@ -50,8 +58,8 @@ systemctl is-active --quiet ssh && ok "ssh ativo apos rollback" || fail "ssh ina
 
 # ------------------------------------------------------------------ B
 section "B. Aplicacao definitiva (guard de 10 min)"
-bash "$APPLY" "$ADMIN_USER" --skip-upgrade >/dev/null 2>&1; rc=$?
-grep -E '^\[(OK|FALHA)\]' "$ADMIN_HOME/homelab-apply.log"
+bash "$APPLY" "$ADMIN_USER" --only-ssh-firewall >/dev/null 2>&1; rc=$?
+grep -E '^\[(OK|FALHA)\]' /var/log/homelab/homelab-apply.log
 [ $rc -eq 0 ] && ok "homelab-apply.sh sem falhas" || fail "homelab-apply.sh retornou $rc"
 nft list chain inet homelab_fw forward >/dev/null 2>&1 && ok "protecao de portas Docker carregada" || fail "cadeia forward ausente"
 mark APPLY_DONE
@@ -95,3 +103,4 @@ docker system df
 systemctl --failed --no-legend | grep . || echo "nenhuma unidade com falha"
 echo "Fim: $(date -Is)  falhas=$FAILS"
 mark POSTBOOT_DONE
+exit $(( FAILS > 0 ? 1 : 0 ))

@@ -1,0 +1,18 @@
+#!/bin/bash
+# mock do docker: estado em $MOCK_STATE/running (um servico por linha)
+S=${MOCK_STATE:?}; echo "docker $*" >> "$S/calls"; touch "$S/running"
+[ "$1" = ps ] && { cat "$S/running"; exit 0; }
+[ "$1" = compose ] || exit 0
+shift; [ "${1:-}" = -f ] && shift 2
+cmd=${1:-}; shift || true
+remove() { grep -vx -- "$1" "$S/running" > "$S/r.tmp" || true; mv "$S/r.tmp" "$S/running"; }
+case "$cmd" in
+  ps) cat "$S/running" ;;
+  stop)
+    if [ -n "${MOCK_STOP_FAIL:-}" ]; then remove "$1"; exit 1; fi   # parada parcial
+    for s; do remove "$s"; done ;;
+  start)
+    [ -n "${MOCK_START_FAIL:-}" ] && exit 1
+    for s; do grep -qx -- "$s" "$S/running" || echo "$s" >> "$S/running"; done ;;
+esac
+exit 0

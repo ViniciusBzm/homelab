@@ -1,0 +1,4 @@
+#!/bin/bash
+# nft real; com MOCK_NFT_LOAD_FAIL=1 falha ao CARREGAR o nftables.conf gerado (mas aceita -c)
+if [ -n "${MOCK_NFT_LOAD_FAIL:-}" ] && [ "${1:-}" = -f ] && [ "${2:-}" = "${HL_NFT_CONF:-}" ]; then echo "mock: falha ao carregar" >&2; exit 1; fi
+exec /usr/sbin/nft "$@"

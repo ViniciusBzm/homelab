@@ -14,9 +14,17 @@ Ordem: do mais simples para o mais drástico. Antes de qualquer mudança arrisca
 
 ## Guarda da chave de recuperação (uma vez)
 
-1. Copie a pasta `%USERPROFILE%\.ssh\homelab-recovery\` para um pendrive guardado em outro lugar e/ou anexe o arquivo ao gerenciador de senhas, junto com a frase-senha.
-2. Depois de confirmar a cópia, **apague** a chave privada de recuperação do PC. Ela só faz sentido guardada fora dele; a chave pública já está no servidor.
-3. Teste uma vez de qualquer máquina: `ssh -i id_ed25519_homelab_recovery <usuario-admin>@<ip-do-servidor>`.
+A ordem importa: **nunca apague a chave local antes de provar que a cópia externa funciona.**
+
+1. **Faça duas cópias externas** da pasta `%USERPROFILE%\.ssh\homelab-recovery\`, por exemplo um pendrive guardado em outro lugar e um anexo no gerenciador de senhas. A frase-senha vai no gerenciador, **nunca** junto do pendrive.
+2. **Teste cada cópia externa, não a local.** Com o pendrive conectado (ex.: `E:`), aponte para o arquivo **da cópia**:
+   ```powershell
+   ssh -o IdentitiesOnly=yes -o IdentityAgent=none -i E:\homelab-recovery\id_ed25519_homelab_recovery <usuario-admin>@<ip-do-servidor> "echo RECOVERY_KEY_OK"
+   ```
+   Repita com o arquivo baixado do gerenciador de senhas. Se o OpenSSH reclamar de permissões no pendrive, copie o arquivo para uma pasta temporária, teste e apague a pasta.
+3. **Só depois** de as duas cópias imprimirem `RECOVERY_KEY_OK`, apague a chave privada de recuperação do PC (`id_ed25519_homelab_recovery`). Mantenha o `.pub`, que é inofensivo e identifica a chave.
+4. Confira que só a cópia externa permite entrar: com o pendrive desconectado, o mesmo comando apontando para o caminho antigo no PC deve falhar.
+5. Anote no gerenciador de senhas a data do teste. Repita o teste a cada 6 meses ou ao trocar de pendrive.
 
 Para revogar uma chave, apague a linha correspondente em `~/.ssh/authorized_keys` no servidor (identificável pelo comentário).
 

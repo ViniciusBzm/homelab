@@ -6,6 +6,7 @@ $dir = Join-Path $env:USERPROFILE '.homelab'
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
 $dst = Join-Path $dir 'pull-homelab-backup.ps1'
 Copy-Item (Join-Path $PSScriptRoot 'pull-homelab-backup.ps1') $dst -Force
+Copy-Item (Join-Path $PSScriptRoot 'HomeLabBackup.psm1') (Join-Path $dir 'HomeLabBackup.psm1') -Force
 
 $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$dst`""
 $daily  = New-ScheduledTaskTrigger -Daily -At '12:00'

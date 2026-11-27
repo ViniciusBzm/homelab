@@ -37,7 +37,14 @@ Laboratório doméstico de estudo: um **Dell Wyse 7020** (AMD GX-420CA, 6 GB nom
 
 > **Atenção (Windows):** agentes que rodam dentro de apps empacotados (MSIX) veem `%LOCALAPPDATA%` virtualizado. Arquivos gravados ali não existem para tarefas agendadas. Use `%USERPROFILE%` ou `C:\ProgramData`.
 
-Configuração local, fora do Git: `/etc/homelab/` (`backup.conf`, `restic.pass` 0600, `docker-lan-tcp`), `stacks/monitoring/.env` e `stacks/monitoring/secrets/` (chave e token do agente Beszel).
+Configuração local, fora do Git: `/etc/homelab/` (`backup.conf`, `firewall.conf`, `restic.pass` 0600), `stacks/monitoring/.env` e `stacks/monitoring/secrets/` (chave e token do agente Beszel).
+
+**Desde a revisão do PR #2:**
+- bibliotecas em `scripts/server/lib/` (instaladas em `/usr/local/lib/homelab`);
+- logs de root em `/var/log/homelab/` (nunca na home);
+- a cópia externa vem de `/var/backups/homelab-restic-export` (com manifesto), nunca do repositório vivo.
+
+**Testes:** `bash tests/server/run.sh` (sandbox, sem sudo) e `tests/windows/Test-HomeLabBackup.ps1`. Rode antes de qualquer commit em `scripts/`. Todo script novo deve respeitar `HL_PATH`/`HL_*` e terminar com `hl_finish`.
 
 ## Procedimentos
 
