@@ -67,6 +67,62 @@ t_backup_push_url_nao_confiavel() {
   assert_rc 0 backup; assert_grep 'status=up' "$MOCK_STATE/curl"; assert_grep '--proto =http' "$MOCK_STATE/curl"
 }
 
+# --- Retry do push (notificacao) ao Uptime Kuma.
+setup_push() {
+  setup_backup
+  export HL_PUSH_URL_FILE="$SB/home/push-url" HL_PUSH_INTERVAL=1
+  echo "http://127.0.0.1:3001/api/push/TokenSecreto123" > "$HL_PUSH_URL_FILE"
+}
+push_calls() { grep -c '^curl ' "$MOCK_STATE/curl" 2>/dev/null || echo 0; }
+L() { echo "$HL_LOG_DIR/homelab-backup.log"; }
+
+t_backup_push_sucesso_imediato() {
+  setup_push
+  assert_rc 0 backup
+  [ "$(push_calls)" -eq 1 ] || fail "esperada 1 chamada, obtidas $(push_calls)"
+  assert_grep 'recebida pelo Uptime Kuma (tentativa 1)' "$(L)"
+  assert_no_grep 'TokenSecreto123' "$(L)"
+}
+
+t_backup_push_kuma_indisponivel_temporariamente() {
+  setup_push
+  MOCK_CURL_FAIL_N=2 assert_rc 0 backup
+  [ "$(push_calls)" -eq 3 ] || fail "esperadas 3 chamadas (para na confirmacao), obtidas $(push_calls)"
+  assert_grep 'recebida pelo Uptime Kuma (tentativa 3)' "$(L)"
+  assert_grep 'tentativa 1 sem confirmacao (curl=7)' "$(L)"
+  assert_grep '^ok ' "$HL_STATE_DIR/homelab-backup.status"
+  [ "$(snapshots)" -eq 1 ] || fail "o backup nao pode ser repetido"
+  assert_no_grep 'TokenSecreto123' "$(L)"
+}
+
+t_backup_push_esgota_tentativas_sem_afetar_backup() {
+  setup_push
+  local t0=$SECONDS
+  HL_PUSH_LIMIT=3 MOCK_CURL_FAIL_N=1000 assert_rc 0 backup
+  local n; n=$(push_calls)
+  [ "$n" -ge 2 ] && [ "$n" -le 4 ] || fail "tentativas fora do limite: $n"
+  assert_grep 'NOTIFICACAO ao Uptime Kuma falhou apos' "$(L)"
+  assert_grep '^ok ' "$HL_STATE_DIR/homelab-backup.status"
+  [ "$(snapshots)" -eq 1 ] || fail "o backup nao pode ser repetido"
+  [ $((SECONDS - t0)) -lt 30 ] || fail "retry excedeu o tempo esperado"
+  assert_no_grep 'TokenSecreto123' "$(L)"
+}
+
+t_backup_push_resposta_sem_ok_nao_confirma() {
+  setup_push
+  HL_PUSH_LIMIT=2 MOCK_CURL_BODY='{"ok":false,"msg":"Monitor not found"}' assert_rc 0 backup
+  assert_grep 'sem confirmacao (curl=resposta-sem-ok)' "$(L)"
+  assert_grep 'NOTIFICACAO ao Uptime Kuma falhou' "$(L)"
+}
+
+t_backup_falha_com_notificacao_falha_e_distinta() {
+  setup_push
+  HL_PUSH_LIMIT=2 MOCK_CURL_FAIL_N=1000 MOCK_STOP_FAIL=1 assert_nonzero backup
+  assert_grep '^fail ' "$HL_STATE_DIR/homelab-backup.status"
+  assert_grep 'status=down' "$MOCK_STATE/curl"
+  assert_grep 'resultado do backup inalterado: down' "$(L)"
+}
+
 t_backup_export_espera_copia_em_andamento() {
   setup_backup
   assert_rc 0 backup; gen1=$(cat "$SB/state/export/GENERATION")

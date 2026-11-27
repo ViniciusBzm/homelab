@@ -1,0 +1,19 @@
+Retry do push do backup ao Uptime Kuma - evidencia de testes (sandbox unshare -rnm no servidor)
+Data: 2026-11-27 18:03 -03 | kernel 6.1.0-56-amd64 | restic 0.14.0 | nftables v1.0.6
+
+1) Codigo novo (scripts/server/homelab-backup.sh com retry):
+   Resultado: 63 passaram, 0 falharam (2026-11-27T18:03:29-03:00)
+   Novos: t_backup_push_sucesso_imediato
+          t_backup_push_kuma_indisponivel_temporariamente
+          t_backup_push_esgota_tentativas_sem_afetar_backup
+          t_backup_push_resposta_sem_ok_nao_confirma
+          t_backup_falha_com_notificacao_falha_e_distinta
+
+2) Regressao: mesmos testes contra homelab-backup.sh do commit 71fddc8 (sem retry):
+   FALHOU t_backup_falha_com_notificacao_falha_e_distinta  ('resultado do backup inalterado: down' ausente)
+   FALHOU t_backup_push_esgota_tentativas_sem_afetar_backup ('tentativas fora do limite: 1')
+   FALHOU t_backup_push_kuma_indisponivel_temporariamente  ('esperadas 3 chamadas, obtidas 1')
+   FALHOU t_backup_push_resposta_sem_ok_nao_confirma       ('sem confirmacao (curl=resposta-sem-ok)' ausente)
+   FALHOU t_backup_push_sucesso_imediato                   ('recebida pelo Uptime Kuma (tentativa 1)' ausente)
+
+Implantacao no servidor: NAO realizada (aguarda revisao). O script instalado continua igual ao 71fddc8.

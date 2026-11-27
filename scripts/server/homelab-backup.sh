@@ -66,8 +66,25 @@ push() {
   if [[ ! "$url" =~ ^http://(127\.0\.0\.1|localhost):[0-9]{1,5}/api/push/[A-Za-z0-9]{8,64}$ ]]; then
     echo "aviso: URL de push invalida ignorada (so http://127.0.0.1:<porta>/api/push/<token>)"; return 0
   fi
-  curl --proto =http -fsS -m 10 -G --data-urlencode "status=$1" --data-urlencode "msg=$2" "$url" >/dev/null \
-    || echo "aviso: push para o Uptime Kuma falhou"
+  # Retry: o Kuma pode ainda estar subindo logo apos o religamento. Para na primeira
+  # confirmacao ({"ok":true}); limite total de PUSH_LIMIT s. So a notificacao e repetida,
+  # nunca o backup. O token nao vai para o log (stderr do curl descartado; so o codigo).
+  local limit=${HL_PUSH_LIMIT:-180} interval=${HL_PUSH_INTERVAL:-10} deadline n=0 rc left resp
+  deadline=$((SECONDS + limit))
+  while left=$((deadline - SECONDS)); [ "$left" -gt 0 ]; do
+    n=$((n + 1))
+    resp=$(curl --proto =http -fs -m "$(( left < 10 ? left : 10 ))" -G \
+      --data-urlencode "status=$1" --data-urlencode "msg=$2" "$url" 2>/dev/null); rc=$?
+    if [ "$rc" -eq 0 ] && [[ "$resp" == *'"ok":true'* ]]; then
+      echo "notificacao: recebida pelo Uptime Kuma (tentativa $n)"; return 0
+    fi
+    [ "$rc" -eq 0 ] && rc=resposta-sem-ok
+    echo "notificacao: tentativa $n sem confirmacao (curl=$rc)"
+    left=$((deadline - SECONDS)); [ "$left" -gt 0 ] || break
+    sleep "$(( left < interval ? left : interval ))"
+  done
+  echo "aviso: NOTIFICACAO ao Uptime Kuma falhou apos $n tentativa(s) em ${limit}s (resultado do backup inalterado: $1)"
+  return 0
 }
 
 # --- Pausa e religamento dos servicos
