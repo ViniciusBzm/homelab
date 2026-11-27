@@ -151,8 +151,21 @@ Esperado:
 ### Achado durante a validação (aberto, NÃO corrigido no servidor)
 **O push do backup para o Uptime Kuma falha sempre.** O backup religa o Kuma e envia o push logo em seguida, enquanto o Kuma ainda está iniciando (log: `aviso: push para o Uptime Kuma falhou`). O mesmo acontecia com o script anterior. Efeito: o monitor "Backup diário" (janela de 26 h) daria um **falso alerta** de backup atrasado mesmo com os backups em dia.
 - **Mitigação aplicada (sem código):** reenvio manual do push referente ao backup bem-sucedido `cc29ef0f`, com a mensagem identificando o reenvio. Isso adia o falso alerta por cerca de 26 h, mas o push automático continua falhando.
-- **Correção publicada para revisão (PENDENTE DE VALIDAÇÃO, não implantada no Wyse):** `push()` do `homelab-backup.sh` agora repete **só a notificação** (nunca o backup) a cada 10 s, com limite total de 180 s, e para na primeira confirmação do Kuma (`{"ok":true}`). A validação da URL não mudou. O log registra apenas o número da tentativa e o código do curl (stderr descartado, sem token). Esgotado o limite, o log diz `NOTIFICACAO ao Uptime Kuma falhou ... (resultado do backup inalterado: up|down)`, e o status e o código de saída do backup não mudam.
+- **Correção (commit `dc8170a`), aprovada na revisão e IMPLANTADA em 27/11/2026 (CONFIRMADO, ver abaixo):** `push()` do `homelab-backup.sh` agora repete **só a notificação** (nunca o backup) a cada 10 s, com limite total de 180 s, e para na primeira confirmação do Kuma (`{"ok":true}`). A validação da URL não mudou. O log registra apenas o número da tentativa e o código do curl (stderr descartado, sem token). Esgotado o limite, o log diz `NOTIFICACAO ao Uptime Kuma falhou ... (resultado do backup inalterado: up|down)`, e o status e o código de saída do backup não mudam.
 - **Testes (27/11/2026, sandbox no Wyse):** 63/63 aprovados (58 anteriores + 5 novos: sucesso imediato, Kuma indisponível nas 2 primeiras tentativas, esgotamento do limite, resposta sem `"ok":true` e falha do backup com falha da notificação). Os 5 novos **falham** com o script do commit `71fddc8` (regressão comprovada). Evidência: [`tests/evidencias/push-retry-2026-11-27.txt`](../tests/evidencias/push-retry-2026-11-27.txt).
+- **Implantação (27/11/2026, 18:14–18:16), só o `homelab-backup`:**
+  - O script anterior foi preservado em `/var/backups/homelab-backup.pre-dc8170a` (0700 root).
+  - Instalado com o sha256 conferido (`c59a7266…`, igual ao do `dc8170a`).
+  - **1ª execução:** backup `54d1b8b6` OK e push confirmado no log, mas a **verificação** do script de implantação falhou por um erro dele: o log é recriado a cada execução e as linhas foram procuradas a partir da contagem antiga. O script novo foi **revertido automaticamente**, como previsto, e o backup foi preservado.
+  - **2ª execução:** depois de corrigida a verificação, `ok 2026-11-27T18:16:14-03:00 snapshot=b6d9e6f2`.
+    - Log: `tentativa 1 sem confirmacao (curl=56)` (Kuma iniciando) e depois `recebida pelo Uptime Kuma (tentativa 2)`, com resposta `{"ok":true}`.
+    - O banco do Kuma, lido em modo somente leitura, tem a batida UP do monitor push com `snapshot=b6d9e6f2`.
+    - Os **9/9 monitores** estão UP. O token não aparece no log.
+    - O manifesto confere (13 arquivos, geração `b6d9e6f2`).
+    - Os **4 contêineres** estão no ar (beszel, beszel-agent, uptime-kuma, socket-proxy).
+    - Os timers de backup e de restauração estão ativos, sem units com falha.
+    - SSH e firewall estão intocados (md5 de referência iguais).
+
 
 ### Pendências
 - **Fase 3** (SSH/firewall, apply e guard novos), com console físico e chave de recuperação validada.

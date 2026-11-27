@@ -159,7 +159,7 @@ A revisão apontou 9 pontos. As correções estão no repositório e testadas em
 | Cópia pull no Windows | **Script e módulo novos** (manifesto, rotação recuperável, lock) | **IMPLANTADO em 27/11** (tarefa reinstalada; `0x0`) |
 | Documentação (chave de recuperação, ntfy, limites) | — | Publicada |
 
-Migração **parcial** executada em 27/11/2026 (fases 1, 2 reduzida, 4 e 5), com evidências em [`docs/migracao-pr2.md`](../migracao-pr2.md#execução-parcial-27112026). A **fase 3** (SSH/firewall/guard) segue pendente até haver console físico e a chave de recuperação validada. Achado aberto: o push do backup para o Kuma falha porque o Kuma ainda está reiniciando (correção com retry publicada no PR #2 para revisão, não implantada).
+Migração **parcial** executada em 27/11/2026 (fases 1, 2 reduzida, 4 e 5), com evidências em [`docs/migracao-pr2.md`](../migracao-pr2.md#execução-parcial-27112026). A **fase 3** (SSH/firewall/guard) segue pendente até haver console físico e a chave de recuperação validada. Achado resolvido: o push do backup falhava porque o Kuma ainda estava reiniciando. O retry (`dc8170a`) foi implantado em 27/11/2026 e o push foi confirmado na 2ª tentativa (**CONFIRMADO**, ver `docs/migracao-pr2.md`).
 
 ## Pendente
 

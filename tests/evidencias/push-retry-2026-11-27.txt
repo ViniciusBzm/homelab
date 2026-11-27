@@ -16,4 +16,14 @@ Data: 2026-11-27 18:03 -03 | kernel 6.1.0-56-amd64 | restic 0.14.0 | nftables v1
    FALHOU t_backup_push_resposta_sem_ok_nao_confirma       ('sem confirmacao (curl=resposta-sem-ok)' ausente)
    FALHOU t_backup_push_sucesso_imediato                   ('recebida pelo Uptime Kuma (tentativa 1)' ausente)
 
-Implantacao no servidor: NAO realizada (aguarda revisao). O script instalado continua igual ao 71fddc8.
+Implantacao: ver item 3.
+
+3) Implantacao no servidor (2026-11-27 18:16, apos aprovacao da revisao):
+   sha256 instalado = c59a726664f9c166f9c065c3a4fc480d710d1df0478ef365256e6695c79a8cd1 (= dc8170a)
+   status: ok 2026-11-27T18:16:14-03:00 snapshot=b6d9e6f2 repo=32M
+   notificacao: tentativa 1 sem confirmacao (curl=56)
+   notificacao: recebida pelo Uptime Kuma (tentativa 2)
+   Kuma (banco somente leitura): batida UP do monitor push com snapshot=b6d9e6f2; MONITORES 9/9 UP
+   MANIFESTO_OK (13 arquivos); 4 conteineres no ar; timers ativos; ACESSO_INTOCADO_OK
+   (A 1a execucao, snapshot 54d1b8b6, foi revertida por erro na verificacao do script de implantacao,
+    nao na correcao; ver docs/migracao-pr2.md.)
