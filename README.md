@@ -8,8 +8,8 @@ Uso um Dell Wyse 7020 (R$ 350) com Debian 12 para praticar administração Linux
 |---|---|---|---|
 | M0 — base Debian e SSH | Sistema atualizado; SSH a partir do Windows validado após reinício | **CONFIRMADO** | [M0](docs/marcos/M0-base-debian-ssh.md) |
 | M1 — Docker | Engine e Compose; ciclo de vida de containers testado | **CONFIRMADO** | [M1](docs/marcos/M1-primeiro-experimento-docker.md) |
-| M2 — rede, hora e segurança | Causa-raiz do ICS corrigida com watchdog; NTP + RTC; SSH só por chave; firewall nftables com portas do Docker bloqueadas por padrão; **rollback automático testado**; tudo persistente após reboot | **CONFIRMADO** (falta validar após reiniciar o PC Windows) | [M2](docs/marcos/M2-rede-seguranca-automacao.md) |
-| M3 — observabilidade e backup | Beszel + Uptime Kuma no ar; backup restic diário com **restauração real testada**; cópia externa no PC; S.M.A.R.T. do pendrive | **EM ANDAMENTO** (painéis e alertas pendentes) | [M3](docs/marcos/M3-observabilidade-backup.md) |
+| M2 — rede, hora e segurança | Causa-raiz do ICS corrigida (o ICS volta sozinho após o boot do Windows); NTP + RTC; SSH só por chave; firewall nftables com portas do Docker bloqueadas por padrão; **rollback automático testado**; tudo persistente após reboot | **CONFIRMADO** | [M2](docs/marcos/M2-rede-seguranca-automacao.md) |
+| M3 — observabilidade e backup | Beszel (métricas, histórico, contêineres, S.M.A.R.T.) + Uptime Kuma (9 monitores, inclusive a saúde do ICS e o push do backup); **alertas reais entregues**; backup diário com restauração **local e externa** testadas; stack volta sozinha após reboot | **CONFIRMADO** | [M3](docs/marcos/M3-observabilidade-backup.md) |
 
 ## Arquitetura
 
@@ -57,7 +57,7 @@ Detalhes em [`scripts/README.md`](scripts/README.md). O contexto para agentes e 
 
 ## Próximo passo
 
-Concluir o M3: criar as contas dos painéis, ligar o agente Beszel, configurar monitores e alertas, testar a chave de recuperação e a restauração a partir da cópia externa, e reiniciar o Wyse para provar que tudo volta sozinho. Ver o [roadmap](docs/proximos-passos.md).
+M4: o primeiro serviço útil sobre essa base (Compose, limites, healthcheck, backup e monitor no Kuma desde o primeiro dia). Antes disso, as ações físicas: guardar a chave de recuperação fora do PC e trocar a bateria CMOS. Ver o [roadmap](docs/proximos-passos.md).
 
 Este laboratório é um ambiente de estudo. **Não é produção nem tem disponibilidade 24/7.**
 

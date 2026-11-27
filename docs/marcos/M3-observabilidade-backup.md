@@ -1,6 +1,6 @@
 # M3 — Observabilidade, backup e recuperação
 
-**Início:** 27/11/2026 · **Status:** **EM ANDAMENTO**. A infraestrutura está implantada e o backup foi validado; os painéis ainda não foram configurados.
+**Período:** 27/11/2026 · **Status:** **CONFIRMADO**. Monitoramento com histórico, disponibilidade, alertas reais, S.M.A.R.T., backup automatizado, restauração local **e** externa, e retorno automático após o reboot, tudo com evidência. Restam ações físicas (guardar a chave de recuperação fora do PC) e o item **PLANEJADO** de imagem completa do disco.
 
 > Decisões e alternativas: [ADR-003](../decisoes/ADR-003-observabilidade-beszel-uptime-kuma.md) (observabilidade) e [ADR-004](../decisoes/ADR-004-backup-restic-pull.md) (backup).
 
@@ -103,13 +103,35 @@ O Wyse e o **PC Windows** foram ligados por volta das 11:45 (o Windows registrou
 
 - **Alertas:** ntfy com tópico aleatório (fora do Git), ligado aos 9 monitores do Kuma e às notificações do Beszel. O Beszel tem alertas de Status (1 min), CPU > 80% (10 min), RAM > 85% (10 min), Disco > 80% e Temperatura > 75 °C (5 min). **Entrega comprovada:** o histórico do tópico no ntfy mostra as duas mensagens de teste (Kuma e Beszel).
 
+### Reboot do Wyse: a stack volta sozinha (CONFIRMADO)
+Reinício autorizado pela pessoa às 12:12.
+
+| Verificação | Resultado |
+|---|---|
+| Queda → SSH de volta | 12:12:35 → 12:13:17 (42 s); boot em 25,7 s; kernel 6.1.0-56 |
+| Contêineres (via socket-proxy, sem root) | `beszel` healthy, `beszel-agent` healthy, `uptime-kuma` healthy (após o `start_period`), `socket-proxy` up: **todos voltaram sozinhos** (`restart: unless-stopped`) |
+| Painéis vistos do PC | Beszel `200`, Kuma `302`; porta 8080 continua descartada |
+| Beszel | Sistema `up`; histórico retomado; **S.M.A.R.T.: `/dev/sda` "32GB SATA Flash Drive" PASSED** (primeira coleta) |
+| Uptime Kuma | 9 de 9 monitores **UP**, sem nenhum DOWN no histórico após o boot |
+| SSH / serviços / rede | Senha recusada; ssh, nftables, docker e timesyncd ativos; DNS OK; NTP `yes`; nenhuma unidade com falha |
+| Recursos | RAM 872 MiB; `/` 28% |
+
+O reboot não gerou alerta, e isso é o comportamento desejado: a queda (42 s) ficou abaixo do limite de 1 min do alerta de Status do Beszel, e o Kuma reiniciava junto com o servidor.
+
+### Alerta real, não só o botão de teste (CONFIRMADO)
+Dois monitores temporários foram criados e depois apagados:
+1. **TCP numa porta fechada:** o Kuma marcou DOWN e enviou `"TESTE de alerta (temporario) Down"` ("Connection failed").
+2. **Push com transição UP → DOWN:** um push "vivo" e depois silêncio; após a janela de 20 s, DOWN e `"TESTE de alerta UP->DOWN (temporario) Down"` ("No heartbeat in the time window").
+
+As duas mensagens aparecem no histórico do tópico ntfy. Esse segundo caminho é o mesmo do alerta de **backup atrasado**.
+
 ## Pendente
 
 | Item | Estado |
 |---|---|
-| S.M.A.R.T. no painel do Beszel | **PENDENTE DE VALIDAÇÃO**: a coleta é de hora em hora; a tabela ainda está vazia |
-| Página "Todos os Contêineres" do Beszel | Vazia na interface, mas as métricas dos contêineres **estão** no histórico e nos gráficos do sistema |
-| Inscrição no tópico ntfy no celular | Feita pela pessoa (app ntfy) |
+| S.M.A.R.T. no painel do Beszel | **CONFIRMADO** após o reboot (ver acima) |
+| Página "Todos os Contêineres" do Beszel | Vazia na interface, mas as métricas dos contêineres **estão** no histórico e nos gráficos do sistema. Investigar numa versão futura |
+| Inscrição no tópico ntfy no celular | **PENDENTE** (ação da pessoa no app ntfy) |
 | Testar o login com a chave de recuperação | Executado pela pessoa (frase-senha); resultado informado por ela |
 | Guardar a chave de recuperação fora do PC e apagá-la do disco | **PENDENTE** (ação física da pessoa) |
 
@@ -129,5 +151,5 @@ EXTERNAL_RESTORE_OK itens=5 2026-11-27T12:10:48-03:00
 ```
 
 A cópia temporária foi apagada do servidor depois do teste.
-| Reiniciar o Wyse e provar que a stack volta sozinha | **PENDENTE** (aguarda autorização) |
+| Reiniciar o Wyse e provar que a stack volta sozinha | **CONFIRMADO** (27/11, 12:13) |
 | Imagem completa do pendrive (Clonezilla) | **PLANEJADO** |

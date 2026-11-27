@@ -16,4 +16,4 @@ O servidor só tem internet pelo ICS (Wi-Fi → Ethernet) do PC. Depois de rein�
 - **Comprar um adaptador ou roteador:** fora do orçamento.
 
 ## Consequências
-O servidor continua dependendo do PC ligado. A tarefa reaplica o ICS em até 5 min. A validação depois de reiniciar o **PC** está pendente.
+O servidor continua dependendo do PC ligado. A tarefa reaplica o ICS em até 5 min. Em 27/11/2026, o ICS voltou sozinho depois do boot do PC, sem precisar do watchdog. O monitor "ICS do Windows" no Uptime Kuma alerta se o compartilhamento parar de funcionar.

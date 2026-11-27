@@ -9,8 +9,8 @@
 |---|---|---|
 | **M0 — Base Linux e SSH** | Debian, boot texto, acesso SSH e medições | **CONFIRMADO** (a falha de internet pós-boot foi resolvida no M2) |
 | **M1 — Docker e containers** | Docker Engine, Compose, teste, métricas e limpeza | **CONFIRMADO**, inclusive o retorno após reboot (27/11) |
-| **M2 — Rede previsível e segurança base** | ICS, hora, SSH só por chave, firewall + portas do Docker, rollback, atualizações automáticas ([registro](marcos/M2-rede-seguranca-automacao.md)) | **CONFIRMADO**, inclusive após o reboot do Wyse; **PENDENTE** só a validação após reiniciar o **PC Windows** |
-| **M3 — Observabilidade e recuperação** | Beszel, Uptime Kuma, alertas, backup restic, restauração, chave de recuperação ([registro](marcos/M3-observabilidade-backup.md), [plano](plano-monitoramento-automacao-backup.md)) | **EM ANDAMENTO**: stack e backup **CONFIRMADOS**; painéis, alertas e reboot **PENDENTES** |
+| **M2 — Rede previsível e segurança base** | ICS, hora, SSH só por chave, firewall + portas do Docker, rollback, atualizações automáticas ([registro](marcos/M2-rede-seguranca-automacao.md)) | **CONFIRMADO**, inclusive após o reboot do Wyse e o boot do **PC Windows** (27/11) |
+| **M3 — Observabilidade e recuperação** | Beszel, Uptime Kuma, alertas, backup restic, restauração local e externa, chave de recuperação, troca de senha ([registro](marcos/M3-observabilidade-backup.md), [plano](plano-monitoramento-automacao-backup.md)) | **CONFIRMADO** (27/11); restam ações físicas |
 | **M4 — Aplicações e automação** | API/serviço pequeno, deployment controlado e diagnóstico | **PLANEJADO** |
 | **M5 — WristOps** | Prova de conceito de consulta de dados do lab por relógio | **PLANEJADO** |
 | **2027 — Revisão de capacidade** | Considerar troca de hardware somente mediante medições e necessidade real | **ADIADO** |
@@ -19,18 +19,17 @@
 
 ## Próxima sessão — sequência prudente
 
-**Ponto de retomada (27/11/2026):** concluir o M3. Ao ligar o Wyse, conferir primeiro SSH, internet e os dois painéis (`:8090` e `:3001`).
+**M3 concluído em 27/11/2026.** Próximo marco: **M4**, o primeiro serviço útil, já nascendo com Compose, versão fixa, limites, healthcheck, backup, monitor no Kuma e porta liberada só na LAN.
 
-1. Criar as contas de administrador do **Beszel** e do **Uptime Kuma** (feito pela pessoa).
-2. No Beszel: "Add System" pelo socket `/beszel_socket/beszel.sock`; gravar a chave e o token em `stacks/monitoring/secrets/`; confirmar o agente conectado, o histórico, os containers e o S.M.A.R.T.
-3. No Uptime Kuma: monitores HTTP (Beszel, Kuma), TCP 22 do host, DNS, internet, containers via socket-proxy e um monitor **push** do backup.
-4. Alertas por ntfy (tópico aleatório, fora do Git) no Beszel e no Kuma; disparar um alerta de teste.
-5. Testar o login com a **chave de recuperação** e guardá-la fora do PC.
-6. Restaurar a partir da **cópia externa** (`HomeLab-Backups` no PC) e comparar.
-7. Reiniciar o Wyse e provar que a stack volta sozinha.
-8. Abrir o pull request consolidado para a `main`.
+**Ações físicas da pessoa:**
+- guardar a chave de recuperação num pendrive ou gerenciador de senhas e apagá-la do PC;
+- assinar o tópico ntfy no celular;
+- trocar a bateria CMOS (CR2032) do Wyse.
 
-**Pendências sem prazo:** validar o ICS após reiniciar o PC Windows; trocar a senha antiga do administrador; trocar a bateria CMOS; habilitar a virtualização (SVM) na BIOS do PC, se quiser usar WSL2 ou Docker Desktop.
+**Sem prazo:**
+- imagem completa do pendrive com Clonezilla;
+- habilitar a SVM na BIOS do PC (para WSL2 ou Docker Desktop);
+- avaliar ligar o Wyse direto no roteador, eliminando o ICS.
 
 ## Decisões vigentes
 

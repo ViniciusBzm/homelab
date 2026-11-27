@@ -154,7 +154,7 @@ O servidor caiu às 23:58:16 e o SSH voltou às 23:58:49 (33 s), com um `boot_id
 | Causa-raiz do ICS identificada (KB4055559 + estado "zumbi") | **CONFIRMADO** |
 | ICS restaurado sem intervenção manual (watchdog) | **CONFIRMADO** na sessão |
 | ICS sobrevive ao reboot do **Wyse** | **CONFIRMADO** (internet ok logo após o boot) |
-| ICS após reiniciar o **PC Windows** | **PENDENTE DE VALIDAÇÃO** (reinício não autorizado) |
+| ICS após reiniciar o **PC Windows** | **CONFIRMADO** em 27/11: o PC foi ligado às 11:44:54 e o servidor teve internet sem nenhuma ação do watchdog (ver [M3](M3-observabilidade-backup.md)) |
 | Hora e RTC corretos, inclusive após o reboot | **CONFIRMADO** |
 | SSH só por chave, root bloqueado, persistente após o reboot | **CONFIRMADO** |
 | Firewall drop, persistente, com portas do Docker bloqueadas por padrão | **CONFIRMADO** |

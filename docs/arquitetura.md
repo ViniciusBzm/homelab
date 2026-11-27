@@ -39,7 +39,7 @@ O diagrama da stack de observabilidade e do fluxo de backup está no [M3](marcos
 - O serviço de compartilhamento do Windows continuava ativo; reiniciá-lo pelo PowerShell não solucionou o problema.
 - **Solução temporária observada:** desligar e religar a opção de compartilhamento na interface Wi-Fi do Windows, restaurando a navegação do Wyse nas ocasiões testadas.
 - **CONFIRMADO (26/11/2026):** a causa-raiz é o ICS não persistir após reiniciar (falta de `EnableRebootPersistConnection`, KB4055559) somado a um estado "configurado mas sem NAT/DNS". A correção foi o valor no Registro, o serviço em Automático e um watchdog agendado que testa o DNS do ICS e reaplica o compartilhamento. Detalhes no [M2](marcos/M2-rede-seguranca-automacao.md).
-- **PENDENTE DE VALIDAÇÃO:** recuperação automática depois de reiniciar o PC Windows.
+- **CONFIRMADO (27/11/2026):** o ICS voltou sozinho depois do boot do PC Windows, sem ação do watchdog. O Uptime Kuma passou a monitorar essa saúde continuamente, consultando o DNS do gateway do ICS.
 
 O problema de internet do ICS não deve ser confundido com o estado do daemon SSH ou com falha do Docker. O repositório não publica endereços internos, nomes de usuário, MACs nem credenciais.
 
