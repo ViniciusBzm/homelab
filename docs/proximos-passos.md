@@ -11,7 +11,7 @@
 | **M1 — Docker e containers** | Docker Engine, Compose, teste, métricas e limpeza | **CONFIRMADO**, inclusive o retorno após reboot (27/11) |
 | **M2 — Rede previsível e segurança base** | ICS, hora, SSH só por chave, firewall + portas do Docker, rollback, atualizações automáticas ([registro](marcos/M2-rede-seguranca-automacao.md)) | **CONFIRMADO**, inclusive após o reboot do Wyse e o boot do **PC Windows** (27/11) |
 | **M3 — Observabilidade e recuperação** | Beszel, Uptime Kuma, alertas, backup restic, restauração local e externa, chave de recuperação, troca de senha ([registro](marcos/M3-observabilidade-backup.md), [plano](plano-monitoramento-automacao-backup.md)) | **CONFIRMADO** (27/11); restam ações físicas |
-| **M4 — Aplicações e automação** | API/serviço pequeno, deployment controlado e diagnóstico | **PLANEJADO** |
+| **M4 — HomeLab Development Platform** | HomeLab Control: API read-only e painel, contratos para o WristOps, deploy controlado ([planejamento](m4/README.md)) | **M4.0 EM REVISÃO** (arquitetura) |
 | **M5 — WristOps** | Prova de conceito de consulta de dados do lab por relógio | **PLANEJADO** |
 | **2027 — Revisão de capacidade** | Considerar troca de hardware somente mediante medições e necessidade real | **ADIADO** |
 
