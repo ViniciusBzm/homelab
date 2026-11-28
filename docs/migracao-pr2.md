@@ -170,7 +170,7 @@ Esperado:
 ### Pendências
 - ~~Fase 3~~: executada (abaixo).
 - ~~Correção do push~~: implantada (acima).
-- Remover `/etc/homelab/docker-lan-tcp` (as portas agora vêm do `firewall.conf`): **PENDENTE**, aguarda autorização.
+- ~~Remover `/etc/homelab/docker-lan-tcp`~~: feito às 21:10 (abaixo).
 
 ## Fase 3 executada (27/11/2026)
 
@@ -209,3 +209,21 @@ Esperado:
 - um SSH novo funcionou, e a nova checagem pelo PC deu o mesmo resultado.
 
 Ou seja, as mudanças foram **mantidas**. Equipamentos não foram reiniciados.
+
+## Remoção do arquivo legado `docker-lan-tcp` (27/11/2026, 21:10)
+
+- **Dependências.** No sistema instalado, só o `lib/firewall.sh` cita o arquivo, e só como reserva quando o `firewall.conf` não existe. O `homelab-m3-deploy.sh` do repositório também só o usa nesse caso, para gerar o `firewall.conf`. O `firewall.conf` existe (root, 0644) com `DOCKER_LAN_TCP=8090,3001`, o mesmo conteúdo do legado. Não há referências em units ou cron.
+- **Cópia preservada** em `/var/backups/homelab-legado/docker-lan-tcp.20261127-211055`: arquivo `0600 root:root`, em diretório `0700`.
+- **Firewall inalterado.** Os três valores foram iguais antes e depois da remoção:
+
+  | Verificação | Valor |
+  |---|---|
+  | Regras geradas (`fw_render_from_conf`) | `32eead5a…` |
+  | Regras ativas (`nft list table inet homelab_fw`) | `996e541b…` |
+  | `nftables.conf` (md5) | `01e1b6c1…` |
+
+  Resultado: `FIREWALL_INALTERADO`.
+- **Serviços.** `ssh` e `nftables` ativos; SSH novo a partir do PC OK; 4 contêineres no ar; **9/9 monitores UP**.
+- **Log do guard (evidência que faltava na fase 3):** `2026-11-27T21:01:25-03:00 guard: acesso confirmado; mudancas mantidas`, registrado no `guard.log` e no journal. As entradas da madrugada de 27/11 são do teste de reversão anterior, feito de propósito.
+- **Nota:** o comentário do `stacks/monitoring/compose.yaml` ainda cita o arquivo antigo. Não foi alterado, porque não há autorização para mudanças além da documentação.
+

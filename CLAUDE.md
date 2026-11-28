@@ -17,7 +17,7 @@ Laboratório doméstico de estudo: um **Dell Wyse 7020** (AMD GX-420CA, 6 GB nom
 1. **Nunca** publicar neste repositório: IPs internos, nomes de usuário, hostname, MACs, impressões digitais de chave, tokens, senhas, tópicos ntfy ou URLs de push. Use placeholders (`<usuario-admin>`, `<ip-do-servidor-na-lan>`).
 2. **Sudo continua exigindo senha.** Não criar `NOPASSWD`, não estender o ticket do sudo e não pôr o administrador no grupo `docker`. Tarefas de root são agrupadas num script revisado e executadas com `ssh -t homelab sudo bash <script>` numa janela visível, onde a pessoa digita a senha.
 3. Mudanças em **SSH ou firewall** só pelo `scripts/server/homelab-apply.sh`, que arma o guard de reversão. Confirmar com `touch ~/.homelab-guard-confirm` **só depois** de testar um login novo por chave.
-4. **Não expor nada à internet.** As portas publicadas pelo Docker ficam bloqueadas por padrão; liberar uma porta para a LAN é editar `/etc/homelab/docker-lan-tcp` e reaplicar o `homelab-apply.sh`.
+4. **Não expor nada à internet.** As portas publicadas pelo Docker ficam bloqueadas por padrão; liberar uma porta para a LAN é editar `DOCKER_LAN_TCP` em `/etc/homelab/firewall.conf` e reaplicar o `homelab-apply.sh` (o antigo `docker-lan-tcp` foi removido em 27/11/2026).
 5. Não reiniciar o **PC Windows** sem autorização explícita. O Wyse pode ser reiniciado quando a tarefa pedir, desde que o console local esteja disponível.
 6. Não remover o GNOME (ambiente gráfico de recuperação). Não instalar serviços além dos registrados em `stacks/`.
 7. Orçamento zero: nada pago. Limites: RAM < ~2 GiB para todos os containers; disco: manter `/` abaixo de 70%.
