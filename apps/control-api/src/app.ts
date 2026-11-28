@@ -1,30 +1,53 @@
+import { readFile } from "node:fs/promises";
 import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import type { z } from "zod";
 import {
   API_VERSION,
   BackupResponseSchema,
+  ContainersResponseSchema,
   HealthResponseSchema,
   HostResponseSchema,
+  MonitorsResponseSchema,
+  SummaryResponseSchema,
   type BackupRun,
+  type Containers,
   type HostSnapshot,
+  type Monitors,
   type RestoreRun,
   type SourceMeta,
 } from "@homelab/contracts";
 import type { Config } from "./config";
 import { collectBackup } from "./sources/backup";
-import { collectHost } from "./sources/host";
-import { cached, type SourceResult } from "./sources/source";
+import { collectContainers } from "./sources/containers";
+import { collectHost, type StatfsFn } from "./sources/host";
+import { collectMonitors } from "./sources/monitors";
+import { cached, withCacheAge, type SourceResult } from "./sources/source";
+import { summarize } from "./sources/summary";
 
-export const VERSION = "0.1.0";
+export const VERSION = "0.2.0";
 
+type Timed<T> = () => Promise<{ value: T; at: number }>;
 export type Sources = {
-  host: () => Promise<SourceResult<HostSnapshot>>;
-  backup: () => Promise<[SourceResult<BackupRun>, SourceResult<RestoreRun>]>;
+  host: Timed<SourceResult<HostSnapshot>>;
+  backup: Timed<[SourceResult<BackupRun>, SourceResult<RestoreRun>]>;
+  containers: Timed<SourceResult<Containers>>;
+  monitors: Timed<SourceResult<Monitors>>;
 };
 
+/** Para testes: fonte sem cache (coletada agora). */
+export const fresh = <T>(fn: () => Promise<T>): Timed<T> => async () => ({ value: await fn(), at: Date.now() });
+
+function fixtureStatfs(file: string): StatfsFn {
+  return async () => JSON.parse(await readFile(file, "utf8")) as Awaited<ReturnType<StatfsFn>>;
+}
+
 export function defaultSources(cfg: Config): Sources {
+  const t = cfg.sourceTimeoutMs;
   return {
-    host: cached(() => collectHost({ label: cfg.label, paths: cfg.paths, timeoutMs: cfg.sourceTimeoutMs }), cfg.cacheTtlMs),
+    host: cached(
+      () => collectHost({ label: cfg.label, paths: cfg.paths, timeoutMs: t, statfs: cfg.statfsFixture ? fixtureStatfs(cfg.statfsFixture) : undefined }),
+      cfg.cacheTtlMs,
+    ),
     backup: cached(
       () =>
         collectBackup({
@@ -32,21 +55,43 @@ export function defaultSources(cfg: Config): Sources {
           restoreStatus: cfg.paths.restoreStatus,
           backupMaxAgeMs: cfg.backupMaxAgeMs,
           restoreMaxAgeMs: cfg.restoreMaxAgeMs,
-          timeoutMs: cfg.sourceTimeoutMs,
+          timeoutMs: t,
         }),
       cfg.cacheTtlMs * 3,
     ),
+    containers: cached(() => collectContainers({ dockerUrl: cfg.dockerUrl, timeoutMs: t }), cfg.cacheTtlMs),
+    monitors: cached(() => collectMonitors({ kumaUrl: cfg.kumaUrl, apiKeyFile: cfg.kumaApiKeyFile, timeoutMs: t }), cfg.cacheTtlMs * 3),
   };
 }
 
 const apiError = (code: string, message: string) => ({ error: { code, message } });
 
 export function buildApp(cfg: Config, opts: { sources?: Partial<Sources>; logger?: boolean } = {}): FastifyInstance {
-  const sources: Sources = { ...defaultSources(cfg), ...opts.sources };
+  const src: Sources = { ...defaultSources(cfg), ...opts.sources };
   const app = Fastify({
     logger: opts.logger === false ? false : { level: "info", redact: ["req.headers.authorization", "req.headers.cookie"] },
     exposeHeadRoutes: true,
   });
+
+  // Leitura das fontes ja com a idade do cache somada.
+  const read = {
+    host: async () => {
+      const { value, at } = await src.host();
+      return withCacheAge(value, at);
+    },
+    backup: async () => {
+      const { value, at } = await src.backup();
+      return [withCacheAge(value[0], at), withCacheAge(value[1], at)] as const;
+    },
+    containers: async () => {
+      const { value, at } = await src.containers();
+      return withCacheAge(value, at);
+    },
+    monitors: async () => {
+      const { value, at } = await src.monitors();
+      return withCacheAge(value, at);
+    },
+  };
 
   // Contrato garantido na saida: resposta fora do schema e bug -> 500 generico (detalhe so no log).
   function send<S extends z.ZodType>(reply: FastifyReply, schema: S, payload: z.input<S>) {
@@ -81,13 +126,30 @@ export function buildApp(cfg: Config, opts: { sources?: Partial<Sources>; logger
   );
 
   app.get("/api/v1/host", async (_req, reply) => {
-    const r = await sources.host();
+    const r = await read.host();
     return send(reply, HostResponseSchema, envelope(r.data, [r.meta]));
   });
 
   app.get("/api/v1/backup", async (_req, reply) => {
-    const [b, rt] = await sources.backup();
+    const [b, rt] = await read.backup();
     return send(reply, BackupResponseSchema, envelope({ backup: b.data, restoreTest: rt.data }, [b.meta, rt.meta]));
+  });
+
+  app.get("/api/v1/containers", async (_req, reply) => {
+    const r = await read.containers();
+    return send(reply, ContainersResponseSchema, envelope(r.data, [r.meta]));
+  });
+
+  app.get("/api/v1/monitors", async (_req, reply) => {
+    const r = await read.monitors();
+    return send(reply, MonitorsResponseSchema, envelope(r.data, [r.meta]));
+  });
+
+  // Fontes em paralelo e independentes: a falha de uma nao afeta as outras.
+  app.get("/api/v1/summary", async (_req, reply) => {
+    const [host, [backup, restoreTest], containers, monitors] = await Promise.all([read.host(), read.backup(), read.containers(), read.monitors()]);
+    const all = { host, backup, restoreTest, containers, monitors };
+    return send(reply, SummaryResponseSchema, envelope(summarize(all), Object.values(all).map((r) => r.meta)));
   });
 
   return app;

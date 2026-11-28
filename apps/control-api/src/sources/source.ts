@@ -14,6 +14,10 @@ const MESSAGES: Record<SourceErrorCode, string> = {
   permission_denied: "sem permissao de leitura",
   timeout: "tempo limite excedido",
   io_error: "falha de leitura",
+  not_configured: "fonte nao configurada",
+  unreachable: "servico inacessivel",
+  unauthorized: "credencial recusada pelo servico",
+  bad_status: "resposta inesperada do servico",
   internal: "erro interno da fonte",
 };
 
@@ -59,14 +63,21 @@ export function meta(name: string, state: SourceState, ageSeconds: number | null
 
 export type Collected<T> = { data: T; ageSeconds: number | null; stale?: boolean };
 
-/** Executa uma fonte com timeout; qualquer erro vira meta classificada e data=null. */
-export async function runSource<T>(name: string, fn: () => Promise<Collected<T>>, timeoutMs: number): Promise<SourceResult<T>> {
+/**
+ * Executa uma fonte com timeout. No timeout o AbortSignal e acionado, cancelando de fato
+ * requisicoes HTTP em andamento. Qualquer erro vira meta classificada e data=null.
+ */
+export async function runSource<T>(name: string, fn: (signal: AbortSignal) => Promise<Collected<T>>, timeoutMs: number): Promise<SourceResult<T>> {
+  const ctrl = new AbortController();
   let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new SourceError("error", "timeout")), timeoutMs);
+    timer = setTimeout(() => {
+      ctrl.abort();
+      reject(new SourceError("error", "timeout"));
+    }, timeoutMs);
   });
   try {
-    const r = await Promise.race([fn(), timeout]);
+    const r = await Promise.race([fn(ctrl.signal), timeout]);
     return { data: r.data, meta: meta(name, r.stale ? "stale" : "ok", r.ageSeconds, r.stale ? "outdated" : undefined) };
   } catch (err) {
     const e = err instanceof SourceError ? err : new SourceError("error", "internal");
@@ -76,20 +87,65 @@ export async function runSource<T>(name: string, fn: () => Promise<Collected<T>>
   }
 }
 
-/** Cache com TTL e deduplicacao de chamadas simultaneas (protege o CPU fraco do servidor). */
-export function cached<T>(fn: () => Promise<T>, ttlMs: number, now: () => number = Date.now): () => Promise<T> {
-  let value: { v: T; at: number } | undefined;
-  let inflight: Promise<T> | undefined;
+/** Cache com TTL e deduplicacao; devolve tambem o instante da coleta (para somar a idade do cache). */
+export function cached<T>(fn: () => Promise<T>, ttlMs: number, now: () => number = Date.now): () => Promise<{ value: T; at: number }> {
+  let value: { value: T; at: number } | undefined;
+  let inflight: Promise<{ value: T; at: number }> | undefined;
   return () => {
-    if (value && now() - value.at < ttlMs) return Promise.resolve(value.v);
+    if (value && now() - value.at < ttlMs) return Promise.resolve(value);
     inflight ??= fn()
-      .then((v) => {
-        value = { v, at: now() };
-        return v;
-      })
+      .then((v) => (value = { value: v, at: now() }))
       .finally(() => {
         inflight = undefined;
       });
     return inflight;
   };
+}
+
+/** Soma o tempo em cache a idade informada pela fonte. */
+export function withCacheAge<T>(r: SourceResult<T>, at: number, now: number = Date.now()): SourceResult<T> {
+  const extra = Math.max(0, Math.floor((now - at) / 1000));
+  return r.meta.ageSeconds === null || extra === 0 ? r : { ...r, meta: { ...r.meta, ageSeconds: r.meta.ageSeconds + extra } };
+}
+
+/**
+ * GET HTTP com limite de bytes, sem redirecionamentos e cancelavel. Classifica falhas:
+ * conexao -> unreachable · 401/403 -> unauthorized · outro nao-2xx -> bad_status · excesso -> too_large.
+ */
+export async function httpGet(url: string, opts: { signal: AbortSignal; headers?: Record<string, string>; maxBytes: number }): Promise<string> {
+  let res: Response;
+  try {
+    res = await fetch(url, { signal: opts.signal, headers: opts.headers, redirect: "manual" });
+  } catch (err) {
+    if (opts.signal.aborted) throw new SourceError("error", "timeout");
+    throw new SourceError("error", "unreachable");
+  }
+  if (res.status === 401 || res.status === 403) {
+    await res.body?.cancel();
+    throw new SourceError("error", "unauthorized");
+  }
+  if (res.status < 200 || res.status > 299) {
+    await res.body?.cancel();
+    throw new SourceError("error", "bad_status");
+  }
+  const reader = res.body?.getReader();
+  if (!reader) return "";
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > opts.maxBytes) {
+        await reader.cancel();
+        throw invalid("too_large");
+      }
+      chunks.push(value);
+    }
+  } catch (err) {
+    if (err instanceof SourceError) throw err;
+    throw new SourceError("error", opts.signal.aborted ? "timeout" : "unreachable");
+  }
+  return Buffer.concat(chunks).toString("utf8");
 }

@@ -9,6 +9,12 @@ const EnvSchema = z.object({
   HL_CONTROL_LABEL: z.string().regex(/^[A-Za-z0-9 ._-]{1,64}$/).optional(),
   /** Caminho medido com statfs (um arquivo montado do / do host). Padrao: status do backup. */
   HL_CONTROL_DISK_PATH: z.string().min(1).optional(),
+  /** Somente fixtures: JSON {blocks,bavail,bsize} usado no lugar do statfs real. */
+  HL_CONTROL_STATFS_FIXTURE: z.string().min(1).optional(),
+  HL_CONTROL_DOCKER_URL: z.string().url().regex(/^http:\/\//).default("http://socket-proxy:2375"),
+  HL_CONTROL_KUMA_URL: z.string().url().regex(/^http:\/\//).default("http://uptime-kuma:3001"),
+  /** Arquivo com a chave de API do Kuma (fora do Git). Ausente = fonte "monitors" nao configurada. */
+  HL_CONTROL_KUMA_API_KEY_FILE: z.string().min(1).optional(),
   HL_CONTROL_BACKUP_MAX_AGE_HOURS: z.coerce.number().positive().default(26),
   HL_CONTROL_RESTORE_MAX_AGE_DAYS: z.coerce.number().positive().default(35),
   HL_CONTROL_CACHE_TTL_SECONDS: z.coerce.number().min(0).max(300).default(10),
@@ -23,6 +29,10 @@ export type Config = {
   restoreMaxAgeMs: number;
   cacheTtlMs: number;
   sourceTimeoutMs: number;
+  dockerUrl: string;
+  kumaUrl: string;
+  kumaApiKeyFile: string | null;
+  statfsFixture: string | null;
   paths: {
     loadavg: string;
     meminfo: string;
@@ -47,6 +57,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     restoreMaxAgeMs: e.HL_CONTROL_RESTORE_MAX_AGE_DAYS * 86_400_000,
     cacheTtlMs: e.HL_CONTROL_CACHE_TTL_SECONDS * 1000,
     sourceTimeoutMs: e.HL_CONTROL_SOURCE_TIMEOUT_MS,
+    dockerUrl: e.HL_CONTROL_DOCKER_URL,
+    kumaUrl: e.HL_CONTROL_KUMA_URL,
+    kumaApiKeyFile: e.HL_CONTROL_KUMA_API_KEY_FILE ?? null,
+    statfsFixture: e.HL_CONTROL_STATFS_FIXTURE ?? null,
     paths: {
       loadavg: r("proc", "loadavg"),
       meminfo: r("proc", "meminfo"),

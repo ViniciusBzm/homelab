@@ -3,10 +3,9 @@
 //   fail 2026-11-27T03:36:00-03:00 snapshot=? com 1 falha(s); ver /var/log/...
 //   ok 2026-11-27T13:56:43-03:00 itens=5 dbs_ok
 // So campos conhecidos e validados saem na API; o texto livre (que pode ter caminhos) e descartado.
-import type { BackupRun, RestoreRun } from "@homelab/contracts";
+import { parseStrictIso, type BackupRun, type RestoreRun } from "@homelab/contracts";
 import { invalid, readSmall, runSource, type SourceResult } from "./source";
 
-const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 const CLOCK_SKEW_MS = 5 * 60_000;
 
 export type ParsedStatus = {
@@ -21,9 +20,8 @@ export function parseStatusLine(text: string, nowMs: number): ParsedStatus {
   const line = (text.split(/\r?\n/, 1)[0] ?? "").trim();
   const [result, finishedAt, ...rest] = line.split(/\s+/);
   if (result !== "ok" && result !== "fail") throw invalid();
-  if (!finishedAt || !ISO.test(finishedAt)) throw invalid();
-  const finishedAtMs = Date.parse(finishedAt);
-  if (!Number.isFinite(finishedAtMs)) throw invalid();
+  const finishedAtMs = finishedAt ? parseStrictIso(finishedAt) : null;
+  if (!finishedAt || finishedAtMs === null) throw invalid();
   if (finishedAtMs > nowMs + CLOCK_SKEW_MS) throw invalid("future_date");
   const fields = new Map<string, string>();
   const flags = new Set<string>();

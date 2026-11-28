@@ -18,8 +18,20 @@ export function tempRoot(): { root: string; cleanup: () => void; write: (rel: st
   };
 }
 
+export const STATFS_FIXTURE = fileURLToPath(new URL("../fixtures/statfs.json", import.meta.url));
+/** Porta local fechada: garante que nenhum teste resolve nomes ou alcanca servicos reais. */
+export const CLOSED = "http://127.0.0.1:9";
+
 export function testConfig(root: string, extra: Record<string, string> = {}): Config {
-  return loadConfig({ HL_CONTROL_ROOT: root, HL_CONTROL_LABEL: "homelab-demo", HL_CONTROL_CACHE_TTL_SECONDS: "0", ...extra });
+  return loadConfig({
+    HL_CONTROL_ROOT: root,
+    HL_CONTROL_LABEL: "homelab-demo",
+    HL_CONTROL_CACHE_TTL_SECONDS: "0",
+    HL_CONTROL_STATFS_FIXTURE: STATFS_FIXTURE,
+    HL_CONTROL_DOCKER_URL: CLOSED,
+    HL_CONTROL_KUMA_URL: CLOSED,
+    ...extra,
+  });
 }
 
 /** Data ISO com fuso -03:00, `hoursAgo` horas antes de agora. */

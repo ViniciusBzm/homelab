@@ -1,0 +1,6 @@
+[
+  {"Id":"1111111111111111111111111111111111111111111111111111111111111111","Names":["/uptime-kuma"],"Image":"louislam/uptime-kuma:2.5.12-slim","ImageID":"sha256:aaaa","Command":"/usr/bin/dumb-init -- node server/server.js --secret=FIXTURE-SECRET-CMD","Created":1795800000,"State":"running","Status":"Up 3 hours (healthy)","Ports":[{"IP":"0.0.0.0","PrivatePort":3001,"PublicPort":3001,"Type":"tcp"}],"Labels":{"com.example.token":"FIXTURE-SECRET-LABEL"},"Mounts":[{"Type":"bind","Source":"/opt/fixture/secret-path","Destination":"/app/data","RW":true}],"NetworkSettings":{"Networks":{"monitoring":{"IPAddress":"198.51.100.7","MacAddress":"02:00:00:00:00:07"}}}},
+  {"Id":"2222","Names":["/beszel"],"Image":"henrygd/beszel:0.21.2","Created":1795800000,"State":"running","Status":"Up 3 hours (healthy)","Labels":{},"Mounts":[]},
+  {"Id":"3333","Names":["/beszel-agent"],"Image":"henrygd/beszel-agent:0.21.2-alpine","Created":1795700000,"State":"running","Status":"Up 9 hours (healthy)"},
+  {"Id":"4444","Names":["/socket-proxy"],"Image":"lscr.io/linuxserver/socket-proxy:3.4.8","Created":1795700000,"State":"running","Status":"Up 9 hours"}
+]

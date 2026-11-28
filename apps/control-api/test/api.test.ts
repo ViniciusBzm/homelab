@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { ApiErrorSchema, BackupResponseSchema, HealthResponseSchema, HostResponseSchema } from "@homelab/contracts";
-import { buildApp } from "../src/app";
+import { buildApp, fresh } from "../src/app";
 import { runSource } from "../src/sources/source";
 import { isoHoursAgo, testConfig, tempRoot } from "./helpers";
 
@@ -27,7 +27,7 @@ describe("rotas", () => {
     const res = await get("/api/health");
     expect(res.statusCode).toBe(200);
     const body = HealthResponseSchema.parse(res.json());
-    expect(body.data).toMatchObject({ status: "ok", version: "0.1.0" });
+    expect(body.data).toMatchObject({ status: "ok", version: "0.2.0" });
     expect(body.meta.sources).toEqual([]);
   });
 
@@ -75,7 +75,7 @@ describe("seguranca", () => {
     expect(printed).toContain("/api/v1/backup (GET, HEAD)");
     expect(printed).not.toMatch(/POST|PUT|PATCH|DELETE|OPTIONS/);
     for (const m of ["POST", "PUT", "PATCH", "DELETE"] as const) {
-      for (const url of ["/api/health", "/api/v1/host", "/api/v1/backup"]) {
+      for (const url of ["/api/health", "/api/v1/host", "/api/v1/backup", "/api/v1/containers", "/api/v1/monitors", "/api/v1/summary"]) {
         expect((await app.inject({ method: m, url })).statusCode, `${m} ${url}`).toBe(404);
       }
     }
@@ -93,7 +93,7 @@ describe("seguranca", () => {
   it("violacao de contrato vira 500 generico", async () => {
     const bad = buildApp(testConfig(t.root), {
       logger: false,
-      sources: { host: async () => ({ data: { label: "x" } as never, meta: { name: "host", state: "ok", ageSeconds: 0, error: null } }) },
+      sources: { host: fresh(async () => ({ data: { label: "x" } as never, meta: { name: "host", state: "ok" as const, ageSeconds: 0, error: null } })) },
     });
     const res = await bad.inject({ method: "GET", url: "/api/v1/host" });
     expect(res.statusCode).toBe(500);
@@ -104,7 +104,7 @@ describe("seguranca", () => {
   it("fonte lenta respeita o timeout", async () => {
     const slow = buildApp(testConfig(t.root), {
       logger: false,
-      sources: { host: () => runSource("host", () => new Promise<never>(() => {}), 100) },
+      sources: { host: fresh(() => runSource("host", () => new Promise<never>(() => {}), 100)) },
     });
     const res = await slow.inject({ method: "GET", url: "/api/v1/host" });
     expect(res.statusCode).toBe(200);

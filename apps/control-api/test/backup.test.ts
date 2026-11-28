@@ -31,6 +31,10 @@ describe("parseStatusLine", () => {
     ["sem data", "ok"],
     ["data invalida", "ok 2026-13-45T99:00:00-03:00"],
     ["data sem fuso", "ok 2026-11-27T18:16:14"],
+    ["30 de fevereiro", "ok 2026-02-30T10:00:00-03:00"],
+    ["31 de abril", "ok 2026-04-31T10:00:00Z"],
+    ["24:00", "ok 2026-11-27T24:00:00Z"],
+    ["fuso impossivel", "ok 2026-11-27T10:00:00+15:00"],
   ])("rejeita conteudo invalido (%s)", (_n, text) => {
     expect(() => parseStatusLine(text, NOW)).toThrow(SourceError);
     try {

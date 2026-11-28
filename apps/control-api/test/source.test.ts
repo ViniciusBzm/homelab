@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cached, fromFsError, runSource, SourceError } from "../src/sources/source";
+import { cached, fromFsError, runSource, SourceError, withCacheAge } from "../src/sources/source";
 
 describe("classificacao de falhas", () => {
   it("ENOENT = missing; EACCES = error/permission_denied; outros = error/io_error", () => {
@@ -36,7 +36,19 @@ describe("cached", () => {
     await fn();
     expect(calls).toBe(1);
     t = 1000;
-    await fn();
+    expect(await fn()).toEqual({ value: 2, at: 1000 });
     expect(calls).toBe(2);
+  });
+
+  it("withCacheAge soma o tempo em cache (e preserva idade nula)", () => {
+    const r = { data: 1, meta: { name: "x", state: "ok" as const, ageSeconds: 100, error: null } };
+    expect(withCacheAge(r, 0, 25_900).meta.ageSeconds).toBe(125);
+    expect(withCacheAge({ ...r, meta: { ...r.meta, ageSeconds: null } }, 0, 25_900).meta.ageSeconds).toBeNull();
+  });
+
+  it("runSource entrega um AbortSignal que e acionado no timeout", async () => {
+    let seen: AbortSignal | undefined;
+    await runSource("x", (signal) => ((seen = signal), new Promise<never>(() => {})), 30);
+    expect(seen?.aborted).toBe(true);
   });
 });

@@ -57,6 +57,14 @@ describe("collectHost", () => {
     ]);
   });
 
+  it("temperatura vazia ou com lixo e ignorada (nao vira 0 °C)", async () => {
+    t = tempRoot();
+    t.write("sys/class/hwmon/hwmon0/temp1_input", "");
+    t.write("sys/class/hwmon/hwmon1/temp1_input", "abc\n");
+    const r = await collectHost(opts(t.root));
+    expect(r.data?.temperatures).toEqual([]);
+  });
+
   it("opcionais ausentes nao derrubam a fonte", async () => {
     t = tempRoot();
     t.rm("proc/stat");

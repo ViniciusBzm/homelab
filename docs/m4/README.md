@@ -1,6 +1,6 @@
 # M4 — HomeLab Development Platform
 
-**Estado:** M4.0 **APROVADO** (ADR-008 aceita) · M4.1 **IMPLEMENTADO**, em revisão · **Data:** 27/11/2026 · Branch `feat/m4-development-platform`
+**Estado:** M4.0 **APROVADO** (ADR-008 aceita) · M4.1 **APROVADO** · M4.2 **IMPLEMENTADO**, em revisão · **Data:** 27/11/2026 · Branch `feat/m4-development-platform`
 
 O M4 transforma o HomeLab numa plataforma de desenvolvimento. O primeiro produto é o **HomeLab Control**: uma API própria, **somente leitura** no início, e uma interface web que mostram o estado do servidor (host, contêineres, monitores e backup). A API nasce com contratos versionados, pensando no **WristOps**, um cliente futuro que vai consumi-la.
 
@@ -81,8 +81,8 @@ Cada incremento termina com testes verdes e evidência. Os que mudam o servidor 
 
 ```
 npm ci
-npm test               # typecheck + Vitest (44 testes, sem servidor e sem rede)
-npm run dev            # API em 127.0.0.1:8088 lendo apps/control-api/fixtures/root
+npm test               # typecheck + Vitest (71 testes, sem servidor; HTTP só contra servidores simulados em 127.0.0.1)
+npm run dev            # API em 127.0.0.1:8088 com fixtures e Docker/Kuma SIMULADOS (nada real)
 npm run schemas:export # JSON Schema em packages/contracts/dist/schemas/
 ```
 
@@ -98,4 +98,29 @@ npm run schemas:export # JSON Schema em packages/contracts/dist/schemas/
 - dos arquivos de status saem só campos validados (`snapshot`, `repo`, `itens`, `falhas`, `dbs_ok`);
 - o texto livre, que pode conter caminhos, é descartado.
 
-**Ressalva do modo *fixtures*:** o disco é medido no `statfs` da máquina local, então no PC ele mostra o disco do Windows.
+
+## M4.2: contêineres, monitores e resumo (27/11/2026)
+
+**Rotas novas:** `GET /api/v1/containers`, `/api/v1/monitors` e `/api/v1/summary`. Os contratos existentes não mudaram; as mudanças são aditivas, incluindo os códigos de erro `not_configured`, `unreachable`, `unauthorized` e `bad_status`.
+
+**Fontes HTTP:**
+- `AbortSignal` cancela a requisição no timeout (testado: o servidor vê a conexão fechar);
+- sem redirecionamentos;
+- limite de 2 MiB por resposta.
+
+**Filtragem:**
+- **Docker:** `/containers/json` só fornece nome, imagem, estado, saúde (derivada do `Status`) e criação. *Labels*, montagens, rede, comando e ID são descartados.
+- **Kuma:** do `/metrics` sai só `monitor_status`, com nome e tipo. `monitor_url` (que contém o token de push), `monitor_hostname` e `monitor_port` são descartados.
+- A chave do Kuma é lida de um arquivo e nunca é registrada nem devolvida.
+
+**Resumo:**
+- `source_unavailable`: a API não obteve o dado;
+- `stale_data`: dado desatualizado;
+- `service_failure`: a fonte relata uma falha (monitor DOWN, contêiner parado ou *unhealthy*, backup com falha);
+- status geral: `down` quando há falha operacional; `degraded` quando há fonte indisponível ou desatualizada; `ok` nos outros casos.
+
+**Correções do M4.1:**
+- disco sintético no modo *fixtures*;
+- a idade do dado agora soma o tempo em cache;
+- temperatura vazia não vira 0 °C;
+- datas impossíveis (30/02, 24:00, fuso acima de 14 h) são recusadas.

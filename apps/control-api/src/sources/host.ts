@@ -50,8 +50,9 @@ export async function readTemperatures(hwmonDir: string): Promise<HostSnapshot["
     try {
       const sensor = (await readSmall(join(hwmonDir, dir, "name"), 64)).trim();
       if (!/^[a-z0-9_-]{1,32}$/.test(sensor)) continue;
-      const milli = Number((await readSmall(join(hwmonDir, dir, "temp1_input"), 32)).trim());
-      const celsius = milli / 1000;
+      const raw = (await readSmall(join(hwmonDir, dir, "temp1_input"), 32)).trim();
+      if (!/^-?\d{1,7}$/.test(raw)) continue; // vazio ou lixo: ignorado (nao vira 0 °C)
+      const celsius = Number(raw) / 1000;
       if (Number.isFinite(celsius) && celsius >= -40 && celsius <= 150) out.push({ sensor, celsius });
     } catch {
       /* sensor sem temperatura: ignorado */
