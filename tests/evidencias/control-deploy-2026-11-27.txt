@@ -1,0 +1,59 @@
+Inicio: 2026-11-27T23:30:21-03:00  script=homelab-control-deploy
+
+===== 1. Pre-requisitos (somente leitura) =====
+[OK]    M3 integro: beszel beszel-agent socket-proxy uptime-kuma 
+[OK]    configuracao e chave do Kuma (arquivo protegido; conteudo nao exibido)
+[OK]    commit d27f73b8e0ff (anterior: nenhum)
+
+===== 2. Validacao do gateway (arquivos em uso ainda intocados) =====
+[OK]    gateway.conf valido (nginx -t) com nginxinc/nginx-unprivileged:1.30.6-alpine3.24
+
+===== 3. Build e inspecao da imagem (pode levar alguns minutos) =====
+[OK]    imagem homelab-control:d27f73b8e0ff (279 MB): nao-root, sem ferramentas de dev, sem fixtures
+[OK]    compose.yaml e gateway.conf instalados (anteriores em /opt/homelab/stacks/control/.previous)
+
+===== 4. Subida do projeto control =====
+ Network control_internal Creating 
+ Network control_edge Creating 
+ Network control_edge Created 
+ Network control_internal Created 
+ Container control-gateway Creating 
+ Container control-gateway Created 
+ Container homelab-control Creating 
+ Container homelab-control Created 
+ Container control-gateway Starting 
+ Container control-gateway Started 
+ Container control-gateway Waiting 
+ Container control-gateway Healthy 
+ Container homelab-control Starting 
+ Container homelab-control Started 
+[OK]    homelab-control e control-gateway saudaveis
+
+===== 5. Validacao =====
+-- seis endpoints (dados reais, pelo gateway em <ip>:8088)
+  /api/health -> 200 
+  /api/v1/summary -> 200 host=ok backup=ok restore-test=ok containers=ok monitors=ok
+  /api/v1/host -> 200 host=ok
+  /api/v1/backup -> 200 backup=ok restore-test=ok
+  /api/v1/containers -> 200 containers=ok
+  /api/v1/monitors -> 200 monitors=ok
+  summary: ok {'containers': {'total': 6, 'running': 6}, 'monitors': {'total': 8, 'up': 8, 'down': 0}} []
+-- endurecimento e limites
+homelab-control cpu=0.00% mem=32.25MiB / 160MiB pids=11
+control-gateway cpu=0.00% mem=4.992MiB / 32MiB pids=5
+-- gateway: so caminhos e parametros autorizados
+-- isolamento por nome e por IP (de dentro do Control: tudo deve falhar)
+  34 alvos testados por IP (M3, gateways das redes, IP do host na LAN, internet)
+[OK]    endpoints, endurecimento, limites, gateway restrito, isolamento por IP e M3 intacto
+
+===== 6. Limpeza =====
+[OK]    implantado homelab-control:d27f73b8e0ff em <ip>:8088 (tunel: ssh -L 8088:<ip>:8088 homelab)
+Fim: 2026-11-27T23:33:30-03:00  falhas=0
+
+--- Verificacoes externas (PC, 27/11/2026 ~23:35) ---
+LAN (IP do servidor): 22 ABERTA, 3001 ABERTA, 8090 ABERTA (pre-existentes, M2/M3);
+                      8088, 8080, 8081, 8082, 2375, 45876 bloqueadas.
+Tunel: ssh -L 127.0.0.1:18088:127.0.0.1:8088 homelab -> /api/health 200; pagina 200 com CSP
+  default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; ... (sem unsafe-*).
+Painel no navegador pelo tunel: Operacional; servidor (uptime 2 h 6 min = boot do Wyse; memoria 5,2 GiB = host);
+  6/6 conteineres; backup b6d9e6f2 OK; restauracao OK; 8/8 monitores.

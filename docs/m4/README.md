@@ -1,6 +1,6 @@
 # M4 — HomeLab Development Platform
 
-**Estado:** M4.0 **APROVADO** (ADR-008 aceita) · M4.1 **APROVADO** · M4.2 **APROVADO** · M4.3 **APROVADO** · M4.4 **PREPARADO** (não implantado), em revisão · **Data:** 27/11/2026 · Branch `feat/m4-development-platform`
+**Estado:** M4.0 **APROVADO** (ADR-008 aceita) · M4.1 **APROVADO** · M4.2 **APROVADO** · M4.3 **APROVADO** · M4.4 **IMPLANTADO** em 27/11/2026 (commit `d27f73b`), em revisão · **Data:** 27/11/2026 · Branch `feat/m4-development-platform`
 
 O M4 transforma o HomeLab numa plataforma de desenvolvimento. O primeiro produto é o **HomeLab Control**: uma API própria, **somente leitura** no início, e uma interface web que mostram o estado do servidor (host, contêineres, monitores e backup). A API nasce com contratos versionados, pensando no **WristOps**, um cliente futuro que vai consumi-la.
 
@@ -215,3 +215,35 @@ Qualquer falha nas etapas 4–5 aciona o **rollback automático**: volta à imag
 3. Rodar a suíte `tests/server` no sandbox. A inspeção era só leitura, por isso não rodou no Wyse; localmente passaram os testes portáveis de `test_control.sh`.
 4. Deploy com sudo numa janela visível.
 5. Validar a origem das métricas do host no contêiner (requisito futuro 2 da ADR-008).
+
+## M4.4: primeira implantação real (27/11/2026, 23:30–23:33)
+
+Implantação controlada com `homelab-control-deploy.sh`, terminada com `falhas=0`. Evidência completa em [`tests/evidencias/control-deploy-2026-11-27.txt`](../../tests/evidencias/control-deploy-2026-11-27.txt).
+
+**Antes do deploy:**
+- imagens fixas `node:22.23.5-alpine3.24` e `nginxinc/nginx-unprivileged:1.30.6-alpine3.24` (amd64);
+- suíte Linux no sandbox: **67/67**;
+- chave de API do Kuma criada pela pessoa, digitada sem eco, validada no Kuma (HTTP 200) e gravada com `0600` e uid 1000; nunca foi exibida nem registrada.
+
+**Resultados:**
+
+| Verificação | Resultado |
+|---|---|
+| Imagem | `homelab-control:d27f73b8e0ff`, 279 MB, não-root, sem ferramentas de dev nem fixtures |
+| Seis endpoints com dados reais | 200; fontes host, backup, restore-test, containers e monitors todas `ok`; resumo `ok` |
+| Endurecimento | usuário 1000, `read_only`, `cap_drop ALL` |
+| Limites e uso em repouso | Control 160 MiB / 0,5 CPU / 64 PIDs (uso: 32 MiB); gateway 32 MiB / 0,25 CPU / 32 PIDs (uso: 5 MiB) |
+| Portas | Control sem portas; gateway só em `127.0.0.1:8088` |
+| Gateway | só `GET /containers/json?all=1` e `GET /metrics`; demais caminhos, parâmetros e métodos dão 403 |
+| Isolamento | de dentro do Control, `socket-proxy` e `uptime-kuma` falham por nome; **34 alvos por IP** inalcançáveis (contêineres do M3, gateways das redes, IP do host na LAN e internet) |
+| LAN (do PC) | só 22, 3001 e 8090 abertas (já existiam); 8088, 8080–8082, 2375 e 45876 bloqueadas |
+| M3 | os mesmos 4 contêineres (mesmos IDs), em execução |
+| Painel pelo túnel | `ssh -L 18088:127.0.0.1:8088 homelab`; a página veio com a CSP restritiva |
+| Origem das métricas do host | uptime igual ao do boot do Wyse e memória total igual à do host: refletem o **host** (requisito futuro 2 da ADR-008, validado em parte) |
+
+**Observações:**
+- **Monitores:** o painel mostra **8/8**, mas o Kuma tem 9. O monitor push "Backup diário" não aparece no `/metrics` porque o Kuma só publica a métrica de um monitor push depois de receber um push desde o seu último reinício (reboot das 21:27); o próximo push vem com o backup das 03:35.
+  - Isso é uma limitação da fonte: a API não tem como saber que existe um monitor que o `/metrics` não lista.
+  - **PENDENTE:** confirmar 9/9 depois do backup.
+- **Disco:** o painel mostra 33,3% de uso, contra 28% no `df`. O `statfs` conta como usados os 5% de blocos reservados ao root.
+- **Bloqueio do painel do navegador:** uma requisição foi bloqueada pelo próprio painel do navegador do app (`ERR_NETWORK_ACCESS_DENIED`), não pela API, que respondeu 200 em 8 ms. A atualização automática seguinte veio completa, e o painel mostrou "API inacessível" só naquele cartão, sem inventar dados.
