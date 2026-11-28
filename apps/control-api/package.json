@@ -8,6 +8,7 @@
     "start": "tsx src/main.ts"
   },
   "dependencies": {
+    "@fastify/static": "^11.0.0",
     "@homelab/contracts": "*",
     "fastify": "^5.12.8",
     "zod": "^4.6.7"

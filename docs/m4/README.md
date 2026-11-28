@@ -1,6 +1,6 @@
 # M4 — HomeLab Development Platform
 
-**Estado:** M4.0 **APROVADO** (ADR-008 aceita) · M4.1 **APROVADO** · M4.2 **IMPLEMENTADO**, em revisão · **Data:** 27/11/2026 · Branch `feat/m4-development-platform`
+**Estado:** M4.0 **APROVADO** (ADR-008 aceita) · M4.1 **APROVADO** · M4.2 **APROVADO** · M4.3 **IMPLEMENTADO**, em revisão · **Data:** 27/11/2026 · Branch `feat/m4-development-platform`
 
 O M4 transforma o HomeLab numa plataforma de desenvolvimento. O primeiro produto é o **HomeLab Control**: uma API própria, **somente leitura** no início, e uma interface web que mostram o estado do servidor (host, contêineres, monitores e backup). A API nasce com contratos versionados, pensando no **WristOps**, um cliente futuro que vai consumi-la.
 
@@ -82,7 +82,8 @@ Cada incremento termina com testes verdes e evidência. Os que mudam o servidor 
 ```
 npm ci
 npm test               # typecheck + Vitest (71 testes, sem servidor; HTTP só contra servidores simulados em 127.0.0.1)
-npm run dev            # API em 127.0.0.1:8088 com fixtures e Docker/Kuma SIMULADOS (nada real)
+npm run dev            # painel em http://127.0.0.1:5173 (hot reload) + API simulada em 127.0.0.1:8088
+npm run e2e            # build + Playwright (Edge do Windows; nenhum navegador baixado)
 npm run schemas:export # JSON Schema em packages/contracts/dist/schemas/
 ```
 
@@ -124,3 +125,25 @@ npm run schemas:export # JSON Schema em packages/contracts/dist/schemas/
 - a idade do dado agora soma o tempo em cache;
 - temperatura vazia não vira 0 °C;
 - datas impossíveis (30/02, 24:00, fuso acima de 14 h) são recusadas.
+
+## M4.3: interface web (27/11/2026)
+
+**Stack:** React 19, Vite 8 e Tailwind 4, em `apps/control-web`. Tema escuro (grafite), azul discreto e cores semânticas. Consome **só** os seis endpoints GET; não há ações administrativas.
+
+**Sem falso estado operacional:**
+- toda resposta é validada pelo contrato Zod no navegador; resposta inválida nunca vira dado;
+- o estado geral só fica "Operacional" se o resumo da **última** tentativa for válido e `ok`. Se a atualização falha, aparece "Estado não confirmado", com a última leitura apenas como referência;
+- monitores pendentes, em manutenção ou desconhecidos nunca aparecem como saudáveis.
+
+**Ajustes na API:**
+- o resumo ganhou o tipo `service_warning`, usado para monitor não confirmado, contêiner iniciando, lista vazia e dados incompletos (`skipped`);
+- as listas ganharam o campo `notUp`.
+
+**CSP:**
+- a API continua com `default-src 'none'`;
+- o front-end recebe `default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'`, sem `unsafe-*`;
+- as barras de progresso são SVG por atributo, sem estilo inline.
+
+**Testes:**
+- 84 de unidade, API e contratos (Vitest);
+- 8 ponta a ponta (Playwright), contra a API de produção servindo o build, mais cenários de borda injetados no navegador.

@@ -16,6 +16,7 @@ function unescape(v: string): string {
 export function parseMetrics(body: string): Monitors {
   const monitors: Monitor[] = [];
   let sawMetric = false;
+  let skipped = 0;
   for (const line of body.split("\n")) {
     const m = LINE.exec(line.trim());
     if (!m) continue;
@@ -24,9 +25,15 @@ export function parseMetrics(body: string): Monitors {
     for (const l of m[1]!.matchAll(LABEL)) labels.set(l[1]!, unescape(l[2]!));
     const name = (labels.get("monitor_name") ?? "").replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 64);
     const typeRaw = labels.get("monitor_type") ?? "";
-    if (!name) continue;
+    if (!name) {
+      skipped++;
+      continue;
+    }
+    if (monitors.length >= 200) {
+      skipped++;
+      continue;
+    }
     monitors.push({ name, type: /^[a-z0-9-]{1,32}$/.test(typeRaw) ? typeRaw : "unknown", status: STATUS[m[2]!] ?? "unknown" });
-    if (monitors.length >= 200) break;
   }
   if (!sawMetric && !/^# (HELP|TYPE) /m.test(body)) throw invalid();
   monitors.sort((a, b) => a.name.localeCompare(b.name));
@@ -34,6 +41,8 @@ export function parseMetrics(body: string): Monitors {
     total: monitors.length,
     up: monitors.filter((x) => x.status === "up").length,
     down: monitors.filter((x) => x.status === "down").length,
+    notUp: monitors.filter((x) => x.status !== "up" && x.status !== "down").length,
+    skipped,
     monitors,
   };
 }

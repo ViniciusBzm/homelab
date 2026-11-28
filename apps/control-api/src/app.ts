@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import type { z } from "zod";
 import {
@@ -24,7 +25,13 @@ import { collectMonitors } from "./sources/monitors";
 import { cached, withCacheAge, type SourceResult } from "./sources/source";
 import { summarize } from "./sources/summary";
 
-export const VERSION = "0.2.0";
+export const VERSION = "0.3.0";
+
+/** CSP da API (JSON): nada pode ser carregado. */
+export const CSP_API = "default-src 'none'; frame-ancestors 'none'";
+/** CSP do front-end: so recursos da propria origem; sem inline, sem eval, sem terceiros. */
+export const CSP_WEB =
+  "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 
 type Timed<T> = () => Promise<{ value: T; at: number }>;
 export type Sources = {
@@ -107,12 +114,18 @@ export function buildApp(cfg: Config, opts: { sources?: Partial<Sources>; logger
     meta: { apiVersion: API_VERSION, generatedAt: new Date().toISOString(), sources: sourcesMeta },
   });
 
-  app.addHook("onSend", async (_req, reply) => {
-    reply.header("cache-control", "no-store");
+  app.addHook("onSend", async (req, reply) => {
+    const isApi = req.url.startsWith("/api/") || !cfg.webDir;
     reply.header("x-content-type-options", "nosniff");
     reply.header("referrer-policy", "no-referrer");
-    reply.header("content-security-policy", "default-src 'none'; frame-ancestors 'none'");
+    reply.header("content-security-policy", isApi ? CSP_API : CSP_WEB);
+    if (isApi || !/\/assets\//.test(req.url)) reply.header("cache-control", "no-store");
   });
+
+  if (cfg.webDir) {
+    // Front-end compilado (Vite): index.html + /assets/* com hash. Somente GET/HEAD.
+    app.register(fastifyStatic, { root: cfg.webDir, prefix: "/", index: ["index.html"], wildcard: true, decorateReply: false });
+  }
 
   app.setNotFoundHandler((_req, reply) => reply.code(404).send(apiError("not_found", "rota inexistente")));
   app.setErrorHandler((err: { statusCode?: number }, req, reply) => {

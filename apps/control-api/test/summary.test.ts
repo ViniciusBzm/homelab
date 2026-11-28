@@ -16,8 +16,8 @@ const base = (): AllSources & { backup: { data: NonNullable<AllSources["backup"]
   host: ok("host", null as never),
   backup: ok("backup", { result: "ok" as const, finishedAt: "2026-11-27T18:16:14-03:00", snapshot: null, repoSize: null }),
   restoreTest: ok("restore-test", { result: "ok" as const, finishedAt: "2026-11-27T13:56:43-03:00", items: 5, databasesOk: true, failures: null }),
-  containers: ok("containers", { total: 1, running: 1, containers: [{ name: "a", image: "x:1", state: "running" as const, health: "healthy" as const, createdAt: null }] }),
-  monitors: ok("monitors", { total: 1, up: 1, down: 0, monitors: [{ name: "M", type: "http", status: "up" as const }] }),
+  containers: ok("containers", { total: 1, running: 1, skipped: 0, containers: [{ name: "a", image: "x:1", state: "running" as const, health: "healthy" as const, createdAt: null }] }),
+  monitors: ok("monitors", { total: 1, up: 1, down: 0, notUp: 0, skipped: 0, monitors: [{ name: "M", type: "http", status: "up" as const }] }),
 });
 
 describe("summarize: indisponibilidade x falha operacional", () => {
@@ -53,6 +53,31 @@ describe("summarize: indisponibilidade x falha operacional", () => {
       ["service_failure", "monitor_down", "M"],
       ["service_failure", "backup_failed", null],
     ]);
+  });
+});
+
+describe("summarize: estados nao confirmados nunca viram ok", () => {
+  it.each(["pending", "maintenance", "unknown"] as const)("monitor %s = degraded (service_warning)", (st) => {
+    const s = base();
+    s.monitors.data.monitors[0]!.status = st;
+    expect(summarize(s)).toMatchObject({ status: "degraded", issues: [{ kind: "service_warning", code: `monitor_${st}`, subject: "M" }] });
+  });
+
+  it("listas vazias e itens descartados = degraded", () => {
+    const s = base();
+    s.monitors.data = { total: 0, up: 0, down: 0, notUp: 0, skipped: 0, monitors: [] };
+    s.containers.data.skipped = 2;
+    expect(summarize(s).issues.map((i) => [i.kind, i.source, i.code])).toEqual([
+      ["service_warning", "containers", "incomplete_data"],
+      ["service_warning", "monitors", "no_monitors"],
+    ]);
+    expect(summarize(s).status).toBe("degraded");
+  });
+
+  it("conteiner iniciando = degraded", () => {
+    const s = base();
+    s.containers.data.containers[0]!.health = "starting";
+    expect(summarize(s)).toMatchObject({ status: "degraded", issues: [{ code: "container_starting" }] });
   });
 });
 

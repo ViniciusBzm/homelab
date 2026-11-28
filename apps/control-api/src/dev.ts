@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { MOCK_KUMA_KEY, mockDocker, mockKuma } from "./mock-services";
 
 const fixtures = (p: string) => fileURLToPath(new URL(`../fixtures/${p}`, import.meta.url));
-const [docker, kuma] = await Promise.all([mockDocker(), mockKuma()]);
+const [docker, kuma] = await Promise.all([mockDocker(undefined, 18375), mockKuma(undefined, undefined, 18301)]);
 const keyFile = join(mkdtempSync(join(tmpdir(), "hl-control-dev-")), "kuma-api-key");
 writeFileSync(keyFile, MOCK_KUMA_KEY, { mode: 0o600 });
 

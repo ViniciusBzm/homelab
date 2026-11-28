@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { ApiErrorSchema, BackupResponseSchema, HealthResponseSchema, HostResponseSchema } from "@homelab/contracts";
-import { buildApp, fresh } from "../src/app";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { buildApp, CSP_API, CSP_WEB, fresh } from "../src/app";
 import { runSource } from "../src/sources/source";
 import { isoHoursAgo, testConfig, tempRoot } from "./helpers";
 
@@ -27,7 +29,7 @@ describe("rotas", () => {
     const res = await get("/api/health");
     expect(res.statusCode).toBe(200);
     const body = HealthResponseSchema.parse(res.json());
-    expect(body.data).toMatchObject({ status: "ok", version: "0.2.0" });
+    expect(body.data).toMatchObject({ status: "ok", version: "0.3.0" });
     expect(body.meta.sources).toEqual([]);
   });
 
@@ -88,6 +90,26 @@ describe("seguranca", () => {
     expect(res.headers["x-content-type-options"]).toBe("nosniff");
     expect(res.headers["cache-control"]).toBe("no-store");
     expect(String(res.headers["content-security-policy"])).toContain("default-src 'none'");
+  });
+
+  it("front-end: CSP propria (so 'self') e API continua com default-src 'none'", async () => {
+    const web = join(t.root, "web");
+    mkdirSync(join(web, "assets"), { recursive: true });
+    writeFileSync(join(web, "index.html"), "<!doctype html><title>x</title>");
+    writeFileSync(join(web, "assets", "app-abc.js"), "console.log(1)");
+    const w = buildApp(testConfig(t.root, { HL_CONTROL_WEB_DIR: web }), { logger: false });
+    const page = await w.inject("/");
+    expect(page.statusCode).toBe(200);
+    expect(page.headers["content-security-policy"]).toBe(CSP_WEB);
+    expect(String(page.headers["content-security-policy"])).not.toMatch(/unsafe|\*|http/);
+    const asset = await w.inject("/assets/app-abc.js");
+    expect(asset.statusCode).toBe(200);
+    expect(asset.headers["content-security-policy"]).toBe(CSP_WEB);
+    const api = await w.inject("/api/v1/host");
+    expect(api.headers["content-security-policy"]).toBe(CSP_API);
+    expect((await w.inject({ method: "POST", url: "/" })).statusCode).toBe(404);
+    expect((await w.inject("/../package.json")).statusCode).toBe(404);
+    await w.close();
   });
 
   it("violacao de contrato vira 500 generico", async () => {

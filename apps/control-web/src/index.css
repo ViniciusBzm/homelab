@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Cascadia Mono", "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+
+  /* Grafite */
+  --color-ink-950: #0b0d10;
+  --color-ink-900: #111418;
+  --color-ink-850: #161a20;
+  --color-ink-800: #1c2129;
+  --color-ink-700: #272d37;
+  --color-ink-600: #353d4a;
+  --color-ink-400: #7d8796;
+  --color-ink-300: #a3acb9;
+  --color-ink-100: #e6e9ee;
+
+  /* Azul discreto */
+  --color-accent: #5b8def;
+  --color-accent-soft: #5b8def26;
+
+  /* Semanticas */
+  --color-ok: #3fb68b;
+  --color-warn: #e0a43a;
+  --color-bad: #e5534b;
+  --color-info: #6c9bd2;
+  --color-mute: #6b7482;
+}
+
+@layer base {
+  html,
+  body {
+    @apply bg-ink-950 text-ink-100 font-sans antialiased;
+  }
+  ::selection {
+    @apply bg-accent-soft;
+  }
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}

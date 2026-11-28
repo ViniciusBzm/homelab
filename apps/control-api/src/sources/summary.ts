@@ -19,11 +19,27 @@ export function summarize(s: AllSources): Summary {
     else if (state !== "ok") issues.push({ kind: "source_unavailable", source: name, code: error?.code ?? "internal", subject: null });
   }
   const fail = (source: string, code: string, subject: string | null) => issues.push({ kind: "service_failure", source, code, subject });
-  for (const c of s.containers.data?.containers ?? []) {
-    if (c.state !== "running") fail("containers", "container_not_running", c.name);
-    else if (c.health === "unhealthy") fail("containers", "container_unhealthy", c.name);
+  const warn = (source: string, code: string, subject: string | null) => issues.push({ kind: "service_warning", source, code, subject });
+  const cs = s.containers.data;
+  if (cs) {
+    for (const c of cs.containers) {
+      if (c.state !== "running") fail("containers", "container_not_running", c.name);
+      else if (c.health === "unhealthy") fail("containers", "container_unhealthy", c.name);
+      else if (c.health === "starting") warn("containers", "container_starting", c.name);
+    }
+    if (cs.total === 0) warn("containers", "no_containers", null);
+    if (cs.skipped > 0) warn("containers", "incomplete_data", null);
   }
-  for (const m of s.monitors.data?.monitors ?? []) if (m.status === "down") fail("monitors", "monitor_down", m.name);
+  const ms = s.monitors.data;
+  if (ms) {
+    // Somente "up" e saudavel: pendente, manutencao e desconhecido nunca contam como ok.
+    for (const m of ms.monitors) {
+      if (m.status === "down") fail("monitors", "monitor_down", m.name);
+      else if (m.status !== "up") warn("monitors", `monitor_${m.status}`, m.name);
+    }
+    if (ms.total === 0) warn("monitors", "no_monitors", null);
+    if (ms.skipped > 0) warn("monitors", "incomplete_data", null);
+  }
   if (s.backup.data?.result === "fail") fail("backup", "backup_failed", null);
   if (s.restoreTest.data?.result === "fail") fail("restore-test", "restore_test_failed", null);
 

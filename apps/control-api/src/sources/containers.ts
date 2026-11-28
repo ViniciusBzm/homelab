@@ -17,12 +17,19 @@ export function parseContainers(body: string): Containers {
   }
   if (!Array.isArray(raw)) throw invalid();
   const containers: Container[] = [];
+  let skipped = Math.max(0, raw.length - 256);
   for (const item of raw.slice(0, 256)) {
-    if (!item || typeof item !== "object") continue;
+    if (!item || typeof item !== "object") {
+      skipped++;
+      continue;
+    }
     const o = item as Record<string, unknown>;
     const first = Array.isArray(o.Names) ? o.Names[0] : undefined;
     const name = typeof first === "string" ? first.replace(/^\//, "") : "";
-    if (!NAME.test(name)) continue;
+    if (!NAME.test(name)) {
+      skipped++;
+      continue;
+    }
     const image = typeof o.Image === "string" && IMAGE.test(o.Image) ? o.Image : "unknown";
     const st = typeof o.State === "string" ? o.State.toLowerCase() : "";
     const status = typeof o.Status === "string" ? o.Status : "";
@@ -37,7 +44,7 @@ export function parseContainers(body: string): Containers {
     containers.push({ name, image, state: (STATES.has(st) ? st : "unknown") as Container["state"], health, createdAt: created });
   }
   containers.sort((a, b) => a.name.localeCompare(b.name));
-  return { total: containers.length, running: containers.filter((c) => c.state === "running").length, containers };
+  return { total: containers.length, running: containers.filter((c) => c.state === "running").length, skipped, containers };
 }
 
 export function collectContainers(o: { dockerUrl: string; timeoutMs: number }): Promise<SourceResult<Containers>> {

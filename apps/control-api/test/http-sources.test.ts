@@ -98,6 +98,7 @@ describe("containers", () => {
       ["c", "unknown", "starting", "unknown"],
     ]);
     expect(d.running).toBe(1);
+    expect(d.skipped).toBe(2);
   });
 
   it("JSON invalido = invalid; servico fora = unreachable", async () => {
@@ -135,7 +136,7 @@ describe("monitors", () => {
       ["C", "unknown", "maintenance"],
       ["D", "http", "unknown"],
     ]);
-    expect(d).toMatchObject({ total: 4, up: 0, down: 1 });
+    expect(d).toMatchObject({ total: 4, up: 0, down: 1, notUp: 3, skipped: 1 });
   });
 
   it("corpo que nao e Prometheus = invalid", () => {

@@ -15,6 +15,8 @@ const EnvSchema = z.object({
   HL_CONTROL_KUMA_URL: z.string().url().regex(/^http:\/\//).default("http://uptime-kuma:3001"),
   /** Arquivo com a chave de API do Kuma (fora do Git). Ausente = fonte "monitors" nao configurada. */
   HL_CONTROL_KUMA_API_KEY_FILE: z.string().min(1).optional(),
+  /** Diretorio do front-end compilado (apps/control-web/dist). Ausente = so a API. */
+  HL_CONTROL_WEB_DIR: z.string().min(1).optional(),
   HL_CONTROL_BACKUP_MAX_AGE_HOURS: z.coerce.number().positive().default(26),
   HL_CONTROL_RESTORE_MAX_AGE_DAYS: z.coerce.number().positive().default(35),
   HL_CONTROL_CACHE_TTL_SECONDS: z.coerce.number().min(0).max(300).default(10),
@@ -33,6 +35,7 @@ export type Config = {
   kumaUrl: string;
   kumaApiKeyFile: string | null;
   statfsFixture: string | null;
+  webDir: string | null;
   paths: {
     loadavg: string;
     meminfo: string;
@@ -61,6 +64,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     kumaUrl: e.HL_CONTROL_KUMA_URL,
     kumaApiKeyFile: e.HL_CONTROL_KUMA_API_KEY_FILE ?? null,
     statfsFixture: e.HL_CONTROL_STATFS_FIXTURE ?? null,
+    webDir: e.HL_CONTROL_WEB_DIR ?? null,
     paths: {
       loadavg: r("proc", "loadavg"),
       meminfo: r("proc", "meminfo"),

@@ -12,9 +12,12 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "npm run typecheck && vitest run",
-    "dev": "npm run dev -w @homelab/control-api",
+    "dev": "node apps/control-web/dev.mjs",
     "schemas:export": "npm run schemas:export -w @homelab/contracts",
-    "audit:prod": "npm audit --omit=dev"
+    "audit:prod": "npm audit --omit=dev",
+    "dev:api": "npm run dev -w @homelab/control-api",
+    "build": "npm run build -w @homelab/control-web",
+    "e2e": "npm run build && npm run e2e -w @homelab/control-web"
   },
   "devDependencies": {
     "@types/node": "^22.20.7",
