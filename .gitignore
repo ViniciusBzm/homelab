@@ -4,3 +4,5 @@ coverage/
 *.tsbuildinfo
 test-results/
 playwright-report/
+stacks/*/secrets/
+stacks/*/.env

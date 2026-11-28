@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { z } from "zod";
 
 const EnvSchema = z.object({
@@ -64,7 +64,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     kumaUrl: e.HL_CONTROL_KUMA_URL,
     kumaApiKeyFile: e.HL_CONTROL_KUMA_API_KEY_FILE ?? null,
     statfsFixture: e.HL_CONTROL_STATFS_FIXTURE ?? null,
-    webDir: e.HL_CONTROL_WEB_DIR ?? null,
+    webDir: e.HL_CONTROL_WEB_DIR ? resolve(e.HL_CONTROL_WEB_DIR) : null,
     paths: {
       loadavg: r("proc", "loadavg"),
       meminfo: r("proc", "meminfo"),

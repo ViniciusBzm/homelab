@@ -6,3 +6,6 @@ tests/server/mocks/* text eol=lf
 
 # Fixtures imitam /proc e /sys do Linux: sempre LF.
 apps/*/fixtures/** text eol=lf
+# Arquivos lidos no Linux (Docker, nginx, Compose): sempre LF.
+stacks/** text eol=lf
+.dockerignore text eol=lf

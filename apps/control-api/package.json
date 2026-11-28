@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/dev.ts",
-    "start": "tsx src/main.ts"
+    "start": "tsx src/main.ts",
+    "build": "node build.mjs"
   },
   "dependencies": {
     "@fastify/static": "^11.0.0",

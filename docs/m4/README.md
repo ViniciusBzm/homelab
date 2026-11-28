@@ -1,6 +1,6 @@
 # M4 — HomeLab Development Platform
 
-**Estado:** M4.0 **APROVADO** (ADR-008 aceita) · M4.1 **APROVADO** · M4.2 **APROVADO** · M4.3 **IMPLEMENTADO**, em revisão · **Data:** 27/11/2026 · Branch `feat/m4-development-platform`
+**Estado:** M4.0 **APROVADO** (ADR-008 aceita) · M4.1 **APROVADO** · M4.2 **APROVADO** · M4.3 **APROVADO** · M4.4 **PREPARADO** (não implantado), em revisão · **Data:** 27/11/2026 · Branch `feat/m4-development-platform`
 
 O M4 transforma o HomeLab numa plataforma de desenvolvimento. O primeiro produto é o **HomeLab Control**: uma API própria, **somente leitura** no início, e uma interface web que mostram o estado do servidor (host, contêineres, monitores e backup). A API nasce com contratos versionados, pensando no **WristOps**, um cliente futuro que vai consumi-la.
 
@@ -147,3 +147,71 @@ npm run schemas:export # JSON Schema em packages/contracts/dist/schemas/
 **Testes:**
 - 84 de unidade, API e contratos (Vitest);
 - 8 ponta a ponta (Playwright), contra a API de produção servindo o build, mais cenários de borda injetados no navegador.
+
+## M4.4: preparação da implantação (27/11/2026). NÃO implantado
+
+**Arquivos:**
+- `stacks/control/Dockerfile`: multi-stage, com build do front e empacotamento da API (`dist/server.mjs`, executado com `node`; sem tsx);
+- `stacks/control/compose.yaml`: projeto `control`, separado do M3;
+- `stacks/control/gateway.conf`;
+- `stacks/control/.env.example`;
+- `.dockerignore`;
+- `scripts/server/homelab-control-deploy.sh` e `scripts/server/lib/control.sh`.
+
+**Imagem final:**
+- contém só o runtime do Node, as dependências de produção, `server.mjs` e o front compilado;
+- não contém npm/npx/corepack/yarn, tsx, esbuild, vite, vitest, playwright, fixtures nem código-fonte. O deploy confere isso antes de subir.
+
+**Contêiner:**
+- usuário 1000, sistema de arquivos somente leitura (`tmpfs /tmp` de 16 MB), `cap_drop: ALL` e `no-new-privileges`;
+- limites: 160 MiB de memória, 0,5 CPU e 64 PIDs;
+- publica só `127.0.0.1:8088`; o acesso é por túnel: `ssh -L 8088:127.0.0.1:8088 homelab`;
+- os dois arquivos de status são montados `:ro`;
+- a chave do Kuma fica em `secrets/kuma_api_key`: fora do Git, `0600`, dono uid 1000, nunca exibida.
+
+**Isolamento do socket-proxy:** a inspeção confirmou que o proxy do M3 responde 200 ao `inspect`. A solução mais leve é o **`control-gateway`**: nginx sem privilégios, com 32 MiB e sem portas publicadas. Ele é o único contêiner do projeto na rede `monitoring`.
+- O Control fica só nas redes `control_edge` (para a porta local) e `control_internal` (`internal: true`); não alcança `socket-proxy` nem `uptime-kuma` diretamente.
+- O gateway libera exatamente:
+  - `GET /containers/json?all=1` → socket-proxy;
+  - `GET /metrics` → Kuma.
+- Todo o resto recebe 403, inclusive `inspect`, `version`, outros métodos e outros caminhos.
+- A stack do M3 não é alterada.
+
+**Deploy (`sudo bash homelab-control-deploy.sh <admin> <repo>`):**
+1. **Pré-requisitos, sem alterar nada:**
+   - M3 íntegro;
+   - `.env` com imagens de versão fixa (recusa `latest`);
+   - chave protegida e porta 8088 livre.
+2. **Arquivos:** guarda os anteriores e valida o gateway com `nginx -t`.
+3. **Imagem:** build com a tag do commit e inspeção (usuário, ferramentas, fixtures).
+4. **Subida:** `up -d` só do projeto `control`.
+5. **Validação:**
+   - saúde e fontes;
+   - usuário, `read_only`, capabilities, porta só em 127.0.0.1 e redes;
+   - provas de dentro do contêiner: `inspect` dá 403, `socket-proxy` e `uptime-kuma` são inalcançáveis;
+   - M3 com os mesmos IDs.
+6. **Limpeza:** mantém a imagem atual e a anterior.
+
+Qualquer falha nas etapas 4–5 aciona o **rollback automático**: volta à imagem e aos arquivos anteriores ou, sem versão anterior, faz `down` do projeto `control`. Também há `--rollback` manual.
+
+**Inspeção somente leitura do Wyse (27/11, 22:55):**
+
+| Item | Resultado |
+|---|---|
+| Hardware e sistema | x86_64, 4 núcleos, 4,5 GiB de RAM disponíveis, `/` em 28% |
+| Docker | Engine 29.10.1, Compose 5.8.0, cgroup v2 (limites funcionam) |
+| M3 | 4 contêineres em execução; rede `monitoring` existe |
+| Imagens | sem `node` nem nginx locais: o deploy baixa (registro acessível) |
+| Proxy atual | `inspect` = 200, o que confirma a necessidade do gateway; `networks` e POST = 403 |
+| Kuma `/metrics` sem chave | 401 (a chave precisa ser criada) |
+| Porta 8088 | livre |
+| Arquivos de status | 0644 root |
+| Usuário administrador | uid 1000, igual ao do contêiner |
+| Sensores (`hwmon`) | 2 |
+
+**Pendências para implantar (exigem autorização):**
+1. A pessoa cria a chave de API no Kuma (Configurações → Chaves de API).
+2. Definir as versões fixas de `NODE_IMAGE` e `GATEWAY_IMAGE`.
+3. Rodar a suíte `tests/server` no sandbox. A inspeção era só leitura, por isso não rodou no Wyse; localmente passaram os testes portáveis de `test_control.sh`.
+4. Deploy com sudo numa janela visível.
+5. Validar a origem das métricas do host no contêiner (requisito futuro 2 da ADR-008).

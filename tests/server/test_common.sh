@@ -8,7 +8,7 @@ t_finish_codigo_de_saida() {
 }
 
 t_scripts_terminam_com_codigo_correto() {
-  for s in homelab-apply homelab-backup homelab-restore-test homelab-external-restore-test homelab-m3-deploy; do
+  for s in homelab-apply homelab-backup homelab-restore-test homelab-external-restore-test homelab-m3-deploy homelab-control-deploy; do
     last=$(grep -v '^\s*$' "$REPO/scripts/server/$s.sh" | tail -1)
     [ "$last" = "hl_finish" ] || fail "$s.sh nao termina com hl_finish (ultima linha: $last)"
   done
