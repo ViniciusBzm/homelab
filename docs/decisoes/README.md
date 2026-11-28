@@ -9,4 +9,4 @@
 | [005](ADR-005-sem-ansible-por-enquanto.md) | Scripts idempotentes em vez de Ansible (por enquanto) | Aceita |
 | [006](ADR-006-sudo-com-senha.md) | Sudo continua exigindo senha; tarefas de root em lote | Aceita |
 | [007](ADR-007-guard-concorrencia-falhas-parciais.md) | Guard com lock, recusa com pendência, reversão imediata; logs de root seguros | Proposta (PR #2) |
-| [008](ADR-008-homelab-control.md) | HomeLab Control: API read-only e painel num único contêiner | Proposta (M4.0) |
+| [008](ADR-008-homelab-control.md) | HomeLab Control: API read-only e painel num único contêiner | Aceita |

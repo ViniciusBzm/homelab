@@ -1,6 +1,6 @@
 # ADR-008 — HomeLab Control: API read-only e painel num único contêiner
 
-**Data:** 27/11/2026 · **Estado:** Proposta (M4.0, em revisão)
+**Data:** 27/11/2026 · **Estado:** Aceita (M4.0 aprovado na revisão do commit `fc6e58b`)
 
 ## Contexto
 O M4 inaugura o desenvolvimento de aplicações no HomeLab. O primeiro produto é o **HomeLab Control**, que mostra o estado do servidor e que no futuro será consumido pelo WristOps.
@@ -38,3 +38,8 @@ Restrições do ambiente:
 - **Contratos estáveis:** permitem desenvolver o WristOps em paralelo, usando os JSON Schemas e as *fixtures*.
 - **Build no Wyse:** é lento (minutos), mas raro.
 - **Cuidado ao mudar os scripts de backup:** a fonte "backup" depende de os arquivos de status serem regravados no mesmo inode. Se isso mudar, a montagem precisa mudar para o diretório.
+
+## Requisitos futuros (registrados na aprovação; fora do M4.1)
+1. **Restringir o acesso ao socket-proxy** antes do M4.2: o `inspect` pode revelar variáveis de ambiente e montagens. Avaliar um proxy dedicado ou uma lista de endpoints permitidos só com `GET /containers/json`.
+2. **Validar a origem das métricas do host dentro do contêiner:** comprovar no M4.4 que `/proc` e `/sys` refletem o host, e não o namespace do contêiner (memória, uptime, temperaturas), e que o `statfs` mede o `/` do host.
+3. **Transporte criptografado dos tokens** (TLS, por exemplo com Caddy) **antes** de qualquer exposição na LAN (M4.5). Token não trafega em HTTP aberto.

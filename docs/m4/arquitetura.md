@@ -14,6 +14,7 @@
 
 ## API
 
+- **Respostas validadas** pelo schema Zod antes do envio. Uma resposta fora do contrato vira 500 genérico, e o detalhe só aparece no log.
 - **Somente `GET`.** Um teste garante que não existe rota de outro método.
 - **Rotas:**
   - `GET /api/health`: liveness. Não consulta nenhuma fonte e não exige autenticação.

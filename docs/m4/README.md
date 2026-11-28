@@ -1,6 +1,6 @@
 # M4 — HomeLab Development Platform
 
-**Estado:** M4.0 (arquitetura e planejamento) **EM REVISÃO** · **Data:** 27/11/2026 · Branch `feat/m4-development-platform`
+**Estado:** M4.0 **APROVADO** (ADR-008 aceita) · M4.1 **IMPLEMENTADO**, em revisão · **Data:** 27/11/2026 · Branch `feat/m4-development-platform`
 
 O M4 transforma o HomeLab numa plataforma de desenvolvimento. O primeiro produto é o **HomeLab Control**: uma API própria, **somente leitura** no início, e uma interface web que mostram o estado do servidor (host, contêineres, monitores e backup). A API nasce com contratos versionados, pensando no **WristOps**, um cliente futuro que vai consumi-la.
 
@@ -57,7 +57,7 @@ Cada incremento termina com testes verdes e evidência. Os que mudam o servidor 
   - os tipos inferidos;
   - o script `schemas:export`, que gera o JSON Schema.
 - **`apps/control-api`:**
-  - Fastify com `fastify-type-provider-zod`;
+  - Fastify, com cada resposta validada pelo schema Zod antes do envio. Uma resposta fora do contrato vira 500 genérico. Isso dispensa o `fastify-type-provider-zod`;
   - configuração por variáveis validadas com Zod;
   - fontes `host` (lê `/proc/loadavg`, `/proc/meminfo`, `/proc/uptime`, `statfs` e `/sys/class/hwmon`) e `backup` (lê os arquivos `homelab-*.status`);
   - `HL_CONTROL_ROOT`, um prefixo de caminho que permite apontar para *fixtures* no Windows.
@@ -76,3 +76,26 @@ Cada incremento termina com testes verdes e evidência. Os que mudam o servidor 
 5. Nenhuma mudança no servidor, nenhuma porta aberta, nada de Docker.
 
 **Fora do M4.1:** contêineres, monitores, interface web e deploy.
+
+## M4.1: como rodar (27/11/2026)
+
+```
+npm ci
+npm test               # typecheck + Vitest (44 testes, sem servidor e sem rede)
+npm run dev            # API em 127.0.0.1:8088 lendo apps/control-api/fixtures/root
+npm run schemas:export # JSON Schema em packages/contracts/dist/schemas/
+```
+
+**Estados de cada fonte:**
+- `ok`;
+- `missing`: arquivo ausente;
+- `invalid`: conteúdo ilegível, data no futuro ou arquivo grande demais;
+- `stale`: válido, mas mais antigo que o limite (backup: 26 h; restauração: 35 dias). O dado continua na resposta;
+- `error`: falha real (permissão, E/S ou timeout).
+
+**Sem dados internos na resposta:**
+- as mensagens de erro são fixas;
+- dos arquivos de status saem só campos validados (`snapshot`, `repo`, `itens`, `falhas`, `dbs_ok`);
+- o texto livre, que pode conter caminhos, é descartado.
+
+**Ressalva do modo *fixtures*:** o disco é medido no `statfs` da máquina local, então no PC ele mostra o disco do Windows.
