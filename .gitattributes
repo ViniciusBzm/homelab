@@ -3,3 +3,6 @@
 *.md text eol=lf
 tests/server/mocks/* text eol=lf
 *.psm1 text eol=crlf
+
+# Fixtures imitam /proc e /sys do Linux: sempre LF.
+apps/*/fixtures/** text eol=lf
