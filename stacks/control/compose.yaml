@@ -1,9 +1,10 @@
 # HomeLab Control (M4.4) - projeto Compose "control", separado da stack "monitoring" (M3).
-#   homelab-control  API + painel (somente leitura)       -> 127.0.0.1:8088 (acesso por tunel SSH)
-#   control-gateway  ponte restrita ao Docker/Kuma (nginx) -> sem portas publicadas
+#   homelab-control  API + painel (somente leitura); SO na rede interna, sem portas
+#   control-gateway  nginx restrito: publica 127.0.0.1:8088 (tunel SSH) e e a unica ponte ao Docker/Kuma
 # Redes:
-#   control_edge      bridge comum, so para publicar 127.0.0.1:8088
-#   control_internal  internal: true (sem saida), Control <-> gateway
+#   control_internal  internal: true e SEM IP do host (inhibit_ipv4): o Control nao alcanca o host,
+#                     o M3 nem a internet, por nome ou por IP; so fala com o gateway
+#   control_edge      bridge comum, so para o gateway publicar 127.0.0.1:8088
 #   monitoring        EXTERNA (criada pelo M3); so o gateway entra nela
 # A stack do M3 nao e alterada: nenhum servico dela e declarado aqui.
 name: control
@@ -28,7 +29,9 @@ services:
       - ./gateway.conf:/etc/nginx/conf.d/default.conf:ro
     tmpfs:
       - /tmp:size=8m,mode=1777
-    networks: [control_internal, monitoring]
+    ports:
+      - "127.0.0.1:8088:8088"
+    networks: [control_internal, control_edge, monitoring]
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
       interval: 30s
@@ -58,9 +61,7 @@ services:
     secrets: [kuma_api_key]
     tmpfs:
       - /tmp:size=16m,mode=1777
-    ports:
-      - "127.0.0.1:8088:8088"
-    networks: [control_edge, control_internal]
+    networks: [control_internal]
     mem_limit: 160m
     cpus: 0.5
     pids_limit: 64
@@ -75,6 +76,8 @@ networks:
   control_internal:
     name: control_internal
     internal: true
+    driver_opts:
+      com.docker.network.bridge.inhibit_ipv4: "true"
   monitoring:
     name: monitoring
     external: true
