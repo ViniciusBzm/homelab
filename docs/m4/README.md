@@ -1,6 +1,6 @@
 # M4 — HomeLab Development Platform
 
-**Estado:** M4.0 **APROVADO** (ADR-008 aceita) · M4.1 **APROVADO** · M4.2 **APROVADO** · M4.3 **APROVADO** · M4.4 **IMPLANTADO** em 27/11/2026 (commit `d27f73b`), em revisão · **Data:** 27/11/2026 · Branch `feat/m4-development-platform`
+**Estado:** M4.0 **APROVADO** (ADR-008 aceita) · M4.1 **APROVADO** · M4.2 **APROVADO** · M4.3 **APROVADO** · M4.4 **IMPLANTADO E APROVADO** em 27/11/2026 (commit `d27f73b`; evidências em `7054280`) · **Data:** 27/11/2026 · Branch `feat/m4-development-platform`
 
 O M4 transforma o HomeLab numa plataforma de desenvolvimento. O primeiro produto é o **HomeLab Control**: uma API própria, **somente leitura** no início, e uma interface web que mostram o estado do servidor (host, contêineres, monitores e backup). A API nasce com contratos versionados, pensando no **WristOps**, um cliente futuro que vai consumi-la.
 
@@ -247,3 +247,14 @@ Implantação controlada com `homelab-control-deploy.sh`, terminada com `falhas=
   - **PENDENTE:** confirmar 9/9 depois do backup.
 - **Disco:** o painel mostra 33,3% de uso, contra 28% no `df`. O `statfs` conta como usados os 5% de blocos reservados ao root.
 - **Bloqueio do painel do navegador:** uma requisição foi bloqueada pelo próprio painel do navegador do app (`ERR_NETWORK_ACCESS_DENIED`), não pela API, que respondeu 200 em 8 ms. A atualização automática seguinte veio completa, e o painel mostrou "API inacessível" só naquele cartão, sem inventar dados.
+
+## Pendências de validação do M4.4 (registradas em 27/11/2026)
+
+| # | Pendência | Estado |
+|---|---|---|
+| 1 | Próximo backup automático (28/11, ~03:35) e confirmação do push recebido pelo Kuma | PENDENTE DE VALIDAÇÃO |
+| 2 | Retorno dos **9** monitores no Control (hoje 8/8: falta o push "Backup diário") | PENDENTE DE VALIDAÇÃO |
+| 3 | Tratamento de monitores **esperados** e ausentes no `/metrics` (hoje um monitor ausente não gera alerta) | PLANEJADO |
+| 4 | Alinhar o cálculo de disco ao `df` (descontar os blocos reservados ao root) | PLANEJADO |
+| 5 | Monitoramento do próprio HomeLab Control (por exemplo, monitor no Kuma para `/api/health`) | PLANEJADO |
+| 6 | Persistência do Control após reboot do Wyse (`restart: unless-stopped`) | PENDENTE DE VALIDAÇÃO (exige reboot autorizado) |
