@@ -152,14 +152,14 @@ A revisão apontou 9 pontos. As correções estão no repositório e testadas em
 | Cópia externa | **Export imutável + manifesto + `flock`** | **IMPLANTADO em 27/11** (migração parcial; restauração externa da nova geração OK) |
 | Pausa/religamento no backup | **Versão nova** (consulta que falha não confirma) | **IMPLANTADO em 27/11** |
 | Restauração (local e externa) | **`--verify`, contagem e `integrity_check`** | **IMPLANTADO em 27/11** (local e externa OK) |
-| Firewall | Todas as faixas RFC 1918; portas 8090/3001 (inalterado) | Sub-rede autorizada + IPv6: testado em sandbox, **PENDENTE (fase 3)** |
-| Guard | Versão anterior (inalterada) | Lock, recusa, reversão imediata, snapshot em memória: testado em sandbox, **PENDENTE (fase 3)** |
-| Logs de root | **`/var/log/homelab`** (backup e restauração); histórico antigo em `legado/` | **IMPLANTADO em 27/11** (apply continua com a versão anterior até a fase 3) |
-| Guarda `hl-env` | **Ativa** nos 3 scripts de backup/restauração instalados | **IMPLANTADA em 27/11**; apply e guard-rollback na fase 3 |
+| Firewall | **Só a sub-rede do ICS** + `fe80::/10`; portas 8090/3001 (`firewall.conf`) | **IMPLANTADO em 27/11** (fase 3; guard confirmado) |
+| Guard | **Versão nova** (armado e confirmado na fase 3) | **IMPLANTADO em 27/11** |
+| Logs de root | **`/var/log/homelab`** (backup e restauração); histórico antigo em `legado/` | **IMPLANTADO em 27/11** (apply incluído na fase 3) |
+| Guarda `hl-env` | **Ativa** nos 3 scripts de backup/restauração instalados | **IMPLANTADA em 27/11** (apply e guard-rollback na fase 3) |
 | Cópia pull no Windows | **Script e módulo novos** (manifesto, rotação recuperável, lock) | **IMPLANTADO em 27/11** (tarefa reinstalada; `0x0`) |
 | Documentação (chave de recuperação, ntfy, limites) | — | Publicada |
 
-Migração **parcial** executada em 27/11/2026 (fases 1, 2 reduzida, 4 e 5), com evidências em [`docs/migracao-pr2.md`](../migracao-pr2.md#execução-parcial-27112026). A **fase 3** (SSH/firewall/guard) segue pendente até haver console físico e a chave de recuperação validada. Achado resolvido: o push do backup falhava porque o Kuma ainda estava reiniciando. O retry (`dc8170a`) foi implantado em 27/11/2026 e o push foi confirmado na 2ª tentativa (**CONFIRMADO**, ver `docs/migracao-pr2.md`).
+Migração **parcial** executada em 27/11/2026 (fases 1, 2 reduzida, 4 e 5), com evidências em [`docs/migracao-pr2.md`](../migracao-pr2.md#execução-parcial-27112026). A **fase 3** (SSH/firewall/guard) foi executada às 20:51 do mesmo dia, com o guard confirmado e 9/9 monitores UP (**CONFIRMADO**). Achado resolvido: o push do backup falhava porque o Kuma ainda estava reiniciando. O retry (`dc8170a`) foi implantado em 27/11/2026 e o push foi confirmado na 2ª tentativa (**CONFIRMADO**, ver `docs/migracao-pr2.md`).
 
 ## Pendente
 
@@ -168,7 +168,7 @@ Migração **parcial** executada em 27/11/2026 (fases 1, 2 reduzida, 4 e 5), com
 | S.M.A.R.T. no painel do Beszel | **CONFIRMADO** após o reboot (ver acima) |
 | Página "Todos os Contêineres" do Beszel | Vazia na interface, mas as métricas dos contêineres **estão** no histórico e nos gráficos do sistema. Investigar numa versão futura |
 | Inscrição no tópico ntfy no celular | **PENDENTE** (ação da pessoa no app ntfy) |
-| Testar o login com a chave de recuperação | Executado pela pessoa (frase-senha); resultado informado por ela |
+| Testar o login com a chave de recuperação | **CONFIRMADO** em 27/11 18:38 (conexão independente, `RECOVERY_KEY_OK`) |
 | Guardar a chave de recuperação fora do PC e apagá-la do disco | **PENDENTE** (ação física da pessoa) |
 
 ### Troca da senha antiga do Debian (CONFIRMADO)

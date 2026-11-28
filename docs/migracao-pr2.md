@@ -1,6 +1,6 @@
 # Migração da instalação existente para as correções do PR #2
 
-**Estado:** **EXECUÇÃO PARCIAL em 27/11/2026: fases 1, 2 (reduzida), 4 e 5 concluídas.** A **fase 3 (SSH/firewall) está PENDENTE**: exige console físico disponível e a chave de recuperação validada, e nenhum dos dois estava confirmado no dia. Evidências na seção [Execução parcial](#execução-parcial-27112026).
+**Estado:** **fases 1, 2 (reduzida), 4 e 5 executadas em 27/11/2026 e fase 3 (SSH/firewall/guard) executada no mesmo dia às 20:51, com o guard confirmado (CONFIRMADO).** Evidências nas seções [Execução parcial](#execução-parcial-27112026) e [Fase 3 executada](#fase-3-executada-27112026).
 **Escopo:** trocar scripts e configuração de backup/guard/firewall pela versão do PR #2 **sem reinstalar a stack** e sem tocar nos dados dos serviços.
 
 ## O que NÃO muda (preservado)
@@ -168,6 +168,44 @@ Esperado:
 
 
 ### Pendências
-- **Fase 3** (SSH/firewall, apply e guard novos), com console físico e chave de recuperação validada.
-- Correção do push (acima).
-- Remover `/etc/homelab/docker-lan-tcp` depois da fase 3.
+- ~~Fase 3~~: executada (abaixo).
+- ~~Correção do push~~: implantada (acima).
+- Remover `/etc/homelab/docker-lan-tcp` (as portas agora vêm do `firewall.conf`): **PENDENTE**, aguarda autorização.
+
+## Fase 3 executada (27/11/2026)
+
+**Pré-requisitos confirmados antes da execução:**
+- **Chave de recuperação**, às 18:38. O teste usou uma conexão independente, com configuração própria, sem agente e sem a chave do dia a dia; sem a frase-senha, a conexão foi recusada. Resultado: `RECOVERY_KEY_OK`. Atenção: o `LoginGraceTime 30` exige digitar a frase-senha em até 30 s.
+- **Console físico:** login com a senha nova no `tty1` OK.
+
+**Execução (20:51), com sudo numa janela visível:**
+- **Instalação:** o código de SSH/firewall que tinha sido adiado da fase 2 (`homelab-apply`, `homelab-guard-rollback`, `lib/guard.sh` e `lib/firewall.sh`) foi instalado com o sha256 conferido contra o pacote do `11a372e`. Esses arquivos não mudaram até o `dc8170a`. As versões anteriores foram preservadas em `/var/backups/homelab-pre-fase3-*`.
+- **Sub-rede:** o gateway e o PC foram conferidos dentro da sub-rede do ICS. Foi gerado `/etc/homelab/firewall.conf` com `ALLOWED_V4=<sub-rede-do-ICS>/24`, `ALLOWED_V6=fe80::/10` e `DOCKER_LAN_TCP=8090,3001`, e a prévia foi validada com `nft -c`.
+- **Aplicação:** `homelab-apply <usuario-admin> --only-ssh-firewall` terminou com `falhas=0`:
+  - `[OK] snapshot do estado atual`;
+  - `[OK] guard armado (21:01:23)`;
+  - `[OK] sshd validado e recarregado`;
+  - `[OK] firewall carregado e habilitado no boot`;
+  - `[OK] regras do Docker preservadas`.
+
+**Validação com o guard armado (20:51–20:52):**
+
+| Verificação | Resultado |
+|---|---|
+| Nova conexão SSH independente (sem multiplexação) | OK |
+| Login por senha | Recusado (`Permission denied (publickey)`) |
+| Regras efetivas | `allowed4` = sub-rede do ICS; `allowed6` = `fe80::/10`; `docker_lan_tcp` = {3001, 8090}; política `drop` |
+| Beszel `/api/health` e Uptime Kuma, a partir do PC | HTTP 200 e HTTP 200 |
+| Portas a partir do PC | 22, 8090 e 3001 abertas; 2375, 45876, 631, 80, 443, 8080 e 9000 bloqueadas |
+| Portas em escuta no servidor | 22, 3001 e 8090; socket-proxy só em `127.0.0.1:2375` |
+| Internet a partir do servidor | DNS OK; HTTPS 200 (deb.debian.org) |
+| Contêineres | 4 no ar: beszel, beszel-agent, uptime-kuma e socket-proxy |
+| Monitores do Kuma (banco lido sem alterar) | **9/9 UP**, com verificações posteriores à aplicação |
+
+**Confirmação:** `touch ~/.homelab-guard-confirm` às 20:52:09. Às 21:01:54, depois do prazo do guard:
+- o timer do guard tinha disparado e não existia mais;
+- o `nftables.conf` estava na versão **nova** (não voltou à referência `9feefadd…`);
+- o drop-in do SSH estava igual (`5f6a9ef3…`);
+- um SSH novo funcionou, e a nova checagem pelo PC deu o mesmo resultado.
+
+Ou seja, as mudanças foram **mantidas**. Equipamentos não foram reiniciados.
