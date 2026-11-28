@@ -1,0 +1,9 @@
+[Unit]
+Description=HomeLab - teste de restauracao mensal
+
+[Timer]
+OnCalendar=*-*-01 04:30
+Persistent=true
+
+[Install]
+WantedBy=timers.target

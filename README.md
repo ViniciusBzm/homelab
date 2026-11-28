@@ -1,86 +1,64 @@
-# HomeLab — aprendizado prático com infraestrutura de baixo custo
+# HomeLab — Debian, rede, segurança e observabilidade em hardware de baixo custo
 
-**Um servidor de R$ 350, problemas reais e documentação de cada etapa.**
+Uso um Dell Wyse 7020 (R$ 350) com Debian 12 para praticar administração Linux, diagnóstico de rede, endurecimento de servidor, containers, backup e observabilidade. O repositório registra comandos, decisões e **evidências** de cada marco. Nada é marcado como concluído sem teste.
 
-Este repositório acompanha a construção de um laboratório doméstico com um **Dell Wyse 7020** e **Debian 12**. A ideia é aprender administração Linux, redes, SSH, containers, segurança e observabilidade com o hardware disponível — **sem tratar experimentos como produção, comprar upgrades sem necessidade ou afirmar que algo funciona antes de testar**.
+## Estado atual
 
-O projeto começou pela preparação do sistema e pelo desafio de conectar o servidor usando um PC Windows. Em outubro de 2026, avancei até a instalação do Docker e a execução de containers leves, registrando tanto os resultados quanto os problemas que permaneceram abertos.
+| Marco | Resultado observado | Estado | Registro |
+|---|---|---|---|
+| M0 — base Debian e SSH | Sistema atualizado; SSH a partir do Windows validado após reinício | **CONFIRMADO** | [M0](docs/marcos/M0-base-debian-ssh.md) |
+| M1 — Docker | Engine e Compose; ciclo de vida de containers testado | **CONFIRMADO** | [M1](docs/marcos/M1-primeiro-experimento-docker.md) |
+| M2 — rede, hora e segurança | Causa-raiz do ICS corrigida (o ICS volta sozinho após o boot do Windows); NTP + RTC; SSH só por chave; firewall nftables com portas do Docker bloqueadas por padrão; **rollback automático testado**; tudo persistente após reboot | **CONFIRMADO** | [M2](docs/marcos/M2-rede-seguranca-automacao.md) |
+| M3 — observabilidade e backup | Beszel (métricas, histórico, contêineres, S.M.A.R.T.) + Uptime Kuma (9 monitores, inclusive a saúde do ICS e o push do backup); **alertas reais entregues**; backup diário com restauração **local e externa** testadas; stack volta sozinha após reboot | **CONFIRMADO** | [M3](docs/marcos/M3-observabilidade-backup.md) |
 
-## Ambiente
-
-| Item | Configuração / evidência |
-|---|---|
-| Servidor | Dell Wyse 7020, adquirido por R$ 350 |
-| Processador | AMD GX-420CA (identificação anterior; reconferência futura opcional) |
-| Memória | 6 GB nominais; **5,2 GiB** reportados pelo Debian |
-| Armazenamento | 32 GB nominais; raiz com **29 GB** reportados |
-| Sistema operacional | Debian 12 (Bookworm), `amd64` |
-| Administração | SSH pelo PowerShell do Windows |
-| Rede atual | Ethernet com compartilhamento de internet (ICS) do Windows — **provisório** |
-| Containers | Docker Engine **29.9.1**, Docker Compose **v5.6.0** |
-
-> **Valores medidos, não especificações prometidas:** na última medição após instalar o Docker, `free -h` mostrou **642 MiB** de RAM usada e **4,6 GiB** disponíveis; `df -h /` mostrou **6,2 GB** usados e **21 GB** livres. As leituras são instantâneas e anteriores ao download final do Alpine.
-
-## Onde chegamos
-
-| Marco | Situação | Evidência |
-|---|---|---|
-| **M0 — Debian e acesso** | **CONFIRMADO** na configuração testada | Atualizações, inicialização em modo texto e SSH validado após reinício |
-| **M1 — Docker e containers** | **Experimentos CONFIRMADOS; marco ainda PENDENTE DE VALIDAÇÃO pós-reboot** | `hello-world`, Alpine, uso de recursos, parada e remoção |
-| **M2 — Rede estável** | **PLANEJADO** | ICS ainda exige intervenção em algumas reinicializações |
-| **M3 — Observabilidade e recuperação** | **PLANEJADO** | Nenhum monitoramento persistente instalado |
-| **M4 — Serviços próprios e automação** | **PLANEJADO** | Sem aplicação implantada |
-| **M5 — WristOps** | **PLANEJADO** | Ideia de integração por API; ainda sem protótipo |
-
-### O que já testei de fato
-
-- Atualização dos pacotes Debian e validação do kernel `6.1.0-53-amd64` após reinício.
-- Administração por SSH em rede privada, incluindo correção de uma restrição de permissões de conexão do NetworkManager que afetava o acesso pós-boot.
-- Instalação do Docker a partir do repositório oficial e serviço `docker` com status `active`.
-- Execução de `hello-world`, com download e comunicação cliente–daemon confirmados.
-- Execução de Alpine Linux 3.22 com `sleep infinity`; medição pontual de **0,00% de CPU** e **328 KiB de RAM** do container.
-- Parada, remoção e conferência final: **nenhum container permaneceu criado**.
-
-**Importante:** não hospedo serviços permanentes nesta etapa. Não publiquei portas dos containers; a rede ainda depende de uma solução provisória.
-
-## Arquitetura atual
+## Arquitetura
 
 ```mermaid
 flowchart LR
-    INTERNET["Internet / Wi-Fi doméstico"] --> PC["PC Windows"]
-    PC -->|"ICS por Ethernet<br/>+ acesso SSH"| WYSE["Dell Wyse 7020<br/>Debian 12"]
-    WYSE --> DOCKER["Docker Engine<br/>+ Compose"]
-    DOCKER --> TESTES["Containers de teste<br/>finalizados e removidos"]
+    INTERNET["Internet"] --> WIFI["Wi-Fi doméstico"]
+    WIFI --> PC["PC Windows<br/>ICS + watchdog<br/>cópia do backup"]
+    PC -->|"Ethernet (ICS)<br/>SSH só por chave"| FW{{"nftables<br/>drop por padrão"}}
+    FW --> WYSE["Wyse 7020 · Debian 12"]
+    WYSE --> MON["Beszel + Uptime Kuma<br/>(só LAN)"]
+    WYSE --> BKP[("restic<br/>backup diário")]
+    BKP -. "pull diário" .-> PC
 ```
 
-O compartilhamento de internet do Windows permitiu avançar sem investimento adicional, mas nem sempre recupera a saída para a internet após reiniciar o Wyse. O SSH e o acesso externo são validados separadamente. **Causa-raiz do ICS: ainda não identificada.**
+[Arquitetura detalhada e limites](docs/arquitetura.md) · [Decisões (ADRs)](docs/decisoes/) · [Recuperação](docs/recuperacao.md)
 
-[Entender a arquitetura e seus limites](docs/arquitetura.md)
+## Destaques técnicos
 
-## Documentação
+- **Diagnóstico de causa-raiz:** "SSH funciona, internet não" vinha de o ICS não persistir após reiniciar (KB4055559) e de um estado "configurado sem NAT". O watchdog testa o **efeito** (o DNS do ICS responde), não só a configuração. ([ADR-001](docs/decisoes/ADR-001-ics-watchdog.md))
+- **Mudanças sem trancar o acesso:** SSH e firewall entram com snapshot e reversão automática em 10 min. A reversão foi testada de propósito e restaurou o estado idêntico. ([M2](docs/marcos/M2-rede-seguranca-automacao.md))
+- **Docker atrás do firewall:** a cadeia `forward` roda antes das regras do Docker; uma porta publicada só fica acessível se for liberada explicitamente para a LAN. Teste: bloqueada → liberada → bloqueada. ([ADR-002](docs/decisoes/ADR-002-firewall-nftables-docker.md))
+- **Observabilidade enxuta:** Beszel (métricas, histórico, containers, S.M.A.R.T.) + Uptime Kuma (disponibilidade), com acesso só leitura ao Docker via proxy, limites de recursos e healthchecks. Cerca de 130 MiB no total. ([ADR-003](docs/decisoes/ADR-003-observabilidade-beszel-uptime-kuma.md))
+- **Backup testado:** restic criptografado, retenção 7/4/6, restauração comparada byte a byte e uma cópia "pull" no PC que o servidor não consegue apagar. ([ADR-004](docs/decisoes/ADR-004-backup-restic-pull.md))
 
-| Documento | Conteúdo |
-|---|---|
-| [M0 — Base Debian, rede e SSH](docs/marcos/M0-base-debian-ssh.md) | Instalação, decisões de boot, atualizações e diagnóstico do acesso remoto |
-| [M1 — Primeiro experimento com Docker](docs/marcos/M1-primeiro-experimento-docker.md) | Comandos executados, resultados de teste, consumo e limpeza |
-| [Arquitetura atual](docs/arquitetura.md) | Diagrama, dependências, riscos e arquitetura futura proposta |
-| [Roadmap e próximos passos](docs/proximos-passos.md) | Marcos verificáveis, pendências e próximos critérios de validação |
+## Reproduzir
 
-## O que estou aprendendo
+1. Debian 12 com um usuário administrador e acesso por **chave** SSH.
+2. No servidor, com um clone deste repositório:
+   ```bash
+   sudo bash scripts/server/homelab-apply.sh <usuario-admin>        # hora, updates, SSH, firewall
+   # validar um login novo por chave e confirmar em até 10 min:
+   touch ~/.homelab-guard-confirm
+   sudo bash scripts/server/homelab-m3-deploy.sh <usuario-admin> .  # monitoramento + backup
+   ```
+3. No Windows (se o servidor usa ICS): `scripts/windows/setup-ics-persistent.ps1` como administrador e `scripts/windows/register-backup-pull.ps1` como usuário.
 
-**Linux e operação:** pacotes, serviços systemd, boot, uso de RAM/disco e diagnóstico.  
-**Redes:** Ethernet, compartilhamento de conexão, IP/gateway/DNS, diferenciação entre SSH funcional e acesso à internet.  
-**Containers:** imagens versus containers, daemon, ciclo de vida, Compose e monitoramento com `docker stats`.  
-**Prática profissional:** reproduzir erros, manter acesso de recuperação, documentar evidências e não mascarar pendências.
+Detalhes em [`scripts/README.md`](scripts/README.md). O contexto para agentes e manutenção está em [`CLAUDE.md`](CLAUDE.md).
 
-## Próximo desafio
+## Ambiente
 
-Com acesso local disponível, verificar o retorno do **Docker após reboot** e estudar por que a internet do Wyse nem sempre retorna automaticamente pela ponte Windows. Depois, decidir se e quando a topologia deve mudar antes de receber serviços persistentes.
+- **Hardware:** Dell Wyse 7020, AMD GX-420CA, 6 GB de RAM nominais (5,2 GiB úteis) e um **pendrive SATA de 32 GB** como disco.
+- **Sistema:** Debian 12, kernel 6.1.0-56; Docker Engine 29.10.1 e Compose v5.8.0 (27/11/2026).
+- **Uso medido** (27/11/2026, com o M3 no ar): cerca de 0,9 GiB de RAM e 28% do disco.
+- **Rede:** PC Windows compartilha a internet por Ethernet (ICS). Topologia provisória.
 
-Este laboratório é um ambiente de estudo. **Não é produção nem uma promessa de disponibilidade 24/7.** O objetivo é crescer tecnicamente com decisões justificadas e resultados que outras pessoas possam reproduzir.
+## Próximo passo
 
----
+M4: o primeiro serviço útil sobre essa base (Compose, limites, healthcheck, backup e monitor no Kuma desde o primeiro dia). Antes disso, as ações físicas: guardar a chave de recuperação fora do PC e trocar a bateria CMOS. Ver o [roadmap](docs/proximos-passos.md).
 
-**Última atualização documental:** 16 de outubro de 2026 · **Estado:** etapas iniciais validadas; conectividade pós-reboot e teste de reinício Docker ainda pendentes.
+Este laboratório é um ambiente de estudo. **Não é produção nem tem disponibilidade 24/7.**
 
-**Referências oficiais:** [Debian](https://www.debian.org/) · [Docker Engine no Debian](https://docs.docker.com/engine/install/debian/) · [Docker Compose](https://docs.docker.com/compose/)
+**Registros:** [M0](docs/marcos/M0-base-debian-ssh.md) · [M1](docs/marcos/M1-primeiro-experimento-docker.md) · [M2](docs/marcos/M2-rede-seguranca-automacao.md) · [M3](docs/marcos/M3-observabilidade-backup.md) · [Plano M3/M4](docs/plano-monitoramento-automacao-backup.md) · [Scripts](scripts/)

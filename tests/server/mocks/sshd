@@ -1,0 +1,5 @@
+#!/bin/bash
+# mock: "sshd -t" reprova a configuracao NOVA quando MOCK_SSHD_REJECT_NEW=1
+S=${MOCK_STATE:?}; echo "sshd $*" >> "$S/calls"
+if [ "${1:-}" = -t ] && [ -n "${MOCK_SSHD_REJECT_NEW:-}" ] && grep -q "Protegido pelo homelab-guard" "${HL_SSHD_DROPIN:?}" 2>/dev/null; then exit 1; fi
+exit 0

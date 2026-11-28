@@ -1,0 +1,72 @@
+### Suite de servidor (sandbox unshare -rnm, sem sudo)
+  PASSOU t_apply_config_invalida_nada_muda
+  PASSOU t_apply_execucao_concorrente_recusada
+  PASSOU t_apply_falha_ao_carregar_firewall_reverte_tudo
+  PASSOU t_apply_guard_nao_arma_nada_muda
+  PASSOU t_apply_recusa_com_guard_pendente
+  PASSOU t_apply_reversao_imediata_incompleta_nao_desarma
+  PASSOU t_apply_sshd_invalido_reverte_na_hora
+  PASSOU t_apply_sucesso_arma_guard
+  PASSOU t_backup_config_insegura_recusada
+  PASSOU t_backup_consulta_falha_apos_parar_nao_confirma
+  PASSOU t_backup_consulta_falha_apos_religar_reprova
+  PASSOU t_backup_copia_sob_lock_e_valida
+  PASSOU t_backup_execucao_concorrente_recusada
+  PASSOU t_backup_export_espera_copia_em_andamento
+  PASSOU t_backup_export_ocupado_preserva_versao_anterior
+  PASSOU t_backup_falha_ao_parar_aborta_e_religa
+  PASSOU t_backup_falha_ao_religar_retorna_erro
+  PASSOU t_backup_push_url_nao_confiavel
+  PASSOU t_backup_senha_legivel_por_outros_recusada
+  PASSOU t_backup_sucesso_publica_export_consistente
+  PASSOU t_export_falha_ao_promover_restaura_anterior
+  PASSOU t_export_nova_geracao_invalida_nao_e_promovida
+  PASSOU t_export_recupera_troca_interrompida
+  PASSOU t_externo_arquivo_extra
+  PASSOU t_externo_arquivo_faltando
+  PASSOU t_externo_copia_adulterada
+  PASSOU t_externo_detecta_banco_ausente
+  PASSOU t_externo_sem_manifesto
+  PASSOU t_externo_senha_errada
+  PASSOU t_externo_sucesso
+  PASSOU t_finish_codigo_de_saida
+  PASSOU t_fw_compatibilidade_arquivo_antigo
+  PASSOU t_fw_conf_rejeita_chave_ou_valor_inseguro
+  PASSOU t_fw_render_listas_vazias_validas
+  PASSOU t_fw_render_rejeita_entrada_invalida
+  PASSOU t_fw_render_restrito_a_subrede_com_ipv6
+  PASSOU t_guard_com_confirmacao_mantem
+  PASSOU t_guard_confirmacao_por_link_simbolico_ignorada
+  PASSOU t_guard_reexecucao_restaura_ultimo_estado_bom
+  PASSOU t_guard_restaura_regras_em_memoria_com_servico_desabilitado
+  PASSOU t_guard_restauracao_em_transacao_unica
+  PASSOU t_guard_rollback_incompleto_mantem_armado
+  PASSOU t_guard_sem_confirmacao_restaura
+  PASSOU t_guard_snapshot_falha_nada_muda
+  PASSOU t_guarda_hl_env_antes_do_path_em_todos
+  PASSOU t_hl_env_descartado_em_root_real
+  PASSOU t_hl_env_usa_grep_por_caminho_absoluto
+  PASSOU t_log_nao_segue_link_simbolico
+  PASSOU t_mocks_sao_usados_pelos_scripts
+  PASSOU t_restore_aguarda_lock_do_backup
+  PASSOU t_restore_local_detecta_banco_ausente
+  PASSOU t_restore_local_detecta_banco_corrompido
+  PASSOU t_restore_local_detecta_dados_vazios
+  PASSOU t_restore_local_sucesso
+  PASSOU t_root_nao_escreve_log_na_home_do_admin
+  PASSOU t_scripts_terminam_com_codigo_correto
+  PASSOU t_sem_temporario_previsivel
+  PASSOU t_sintaxe_bash
+
+Resultado: 58 passaram, 0 falharam (2026-11-27T13:36:51-03:00, 6.1.0-56-amd64, restic 0.14.0, nftables v1.0.6 (Lester Gooch #5))
+RC=0
+
+### Ambiente operacional real (namespace inicial do servidor, sem sandbox): HL_PATH=/maligno herdado e um 'grep' falso que sempre aprova no PATH
+uid_map:  0 0 4294967295
+homelab-apply.sh                   PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin | HL_LIB_DIR=<descartado>
+homelab-backup.sh                  PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin | HL_LIB_DIR=<descartado>
+homelab-external-restore-test.sh   PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin | HL_LIB_DIR=<descartado>
+homelab-guard-rollback.sh          PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin | HL_LIB_DIR=<descartado>
+homelab-m3-deploy.sh               PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin | HL_LIB_DIR=<descartado>
+homelab-postboot-check.sh          PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin | HL_LIB_DIR=<descartado>
+homelab-restore-test.sh            PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin | HL_LIB_DIR=<descartado>

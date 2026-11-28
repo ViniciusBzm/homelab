@@ -1,0 +1,10 @@
+#!/bin/bash
+# nft real, com falhas simuladas e registro das chamadas:
+#   MOCK_NFT_LOAD_FAIL=1    falha ao carregar o nftables.conf gerado (aceita -c)
+#   MOCK_NFT_LIST_FAIL=1    falha em "list tables" (snapshot)
+#   MOCK_NFT_RESTORE_FAIL=1 falha na transacao de restauracao do guard
+echo "nft $*" >> "${MOCK_STATE:?}/nft-calls"
+if [ -n "${MOCK_NFT_LOAD_FAIL:-}" ] && [ "${1:-}" = -f ] && [ "${2:-}" = "${HL_NFT_CONF:-}" ]; then echo "mock: falha ao carregar" >&2; exit 1; fi
+if [ -n "${MOCK_NFT_LIST_FAIL:-}" ] && [ "${1:-}" = list ] && [ "${2:-}" = tables ]; then echo "mock: list falhou" >&2; exit 1; fi
+if [ -n "${MOCK_NFT_RESTORE_FAIL:-}" ] && [ "${1:-}" = -f ] && [ "${2:-}" = "${HL_GUARD_DIR:-}/restore.nft" ]; then echo "mock: restauracao falhou" >&2; exit 1; fi
+exec /usr/sbin/nft "$@"

@@ -1,16 +1,16 @@
 # Roadmap do HomeLab
 
-**Revisão:** 16/10/2026  
+**Revisão:** 27/11/2026  
 **Princípio:** pequenos marcos, evidências antes de conclusões e nenhum upgrade prematuro.
 
 ## Marcos
 
 | Marco | Escopo | Estado |
 |---|---|---|
-| **M0 — Base Linux e SSH** | Debian, boot texto, acesso SSH e medições | **CONFIRMADO** para a configuração testada; rede externa pós-boot ainda falha intermitentemente |
-| **M1 — Docker e containers** | Docker Engine, Compose, teste, métricas e limpeza | **PENDENTE DE VALIDAÇÃO** do retorno do serviço após reboot; primeiros experimentos **CONFIRMADOS** |
-| **M2 — Rede previsível** | Eliminar, se viável, dependência do ICS e validar comunicação após boot | **PLANEJADO** |
-| **M3 — Observabilidade e recuperação** | Checks úteis, logs, alertas pontuais e backup testado | **PLANEJADO** |
+| **M0 — Base Linux e SSH** | Debian, boot texto, acesso SSH e medições | **CONFIRMADO** (a falha de internet pós-boot foi resolvida no M2) |
+| **M1 — Docker e containers** | Docker Engine, Compose, teste, métricas e limpeza | **CONFIRMADO**, inclusive o retorno após reboot (27/11) |
+| **M2 — Rede previsível e segurança base** | ICS, hora, SSH só por chave, firewall + portas do Docker, rollback, atualizações automáticas ([registro](marcos/M2-rede-seguranca-automacao.md)) | **CONFIRMADO**, inclusive após o reboot do Wyse e o boot do **PC Windows** (27/11) |
+| **M3 — Observabilidade e recuperação** | Beszel, Uptime Kuma, alertas, backup restic, restauração local e externa, chave de recuperação, troca de senha ([registro](marcos/M3-observabilidade-backup.md), [plano](plano-monitoramento-automacao-backup.md)) | **CONFIRMADO** (27/11); restam ações físicas |
 | **M4 — Aplicações e automação** | API/serviço pequeno, deployment controlado e diagnóstico | **PLANEJADO** |
 | **M5 — WristOps** | Prova de conceito de consulta de dados do lab por relógio | **PLANEJADO** |
 | **2027 — Revisão de capacidade** | Considerar troca de hardware somente mediante medições e necessidade real | **ADIADO** |
@@ -19,15 +19,17 @@
 
 ## Próxima sessão — sequência prudente
 
-**Primeiro passo:** com monitor e teclado à disposição, ligar/reiniciar o Wyse e testar acesso SSH, internet externa do Debian e serviço Docker **separadamente**. Confirmar os resultados antes de alterar a configuração.
+**M3 concluído em 27/11/2026.** Próximo marco: **M4**, o primeiro serviço útil, já nascendo com Compose, versão fixa, limites, healthcheck, backup, monitor no Kuma e porta liberada só na LAN.
 
-Em seguida:
+**Ações físicas da pessoa:**
+- guardar a chave de recuperação num pendrive ou gerenciador de senhas e apagá-la do PC;
+- assinar o tópico ntfy no celular;
+- trocar a bateria CMOS (CR2032) do Wyse.
 
-1. Validar que o Docker inicia após reboot e que o Compose continua acessível.
-2. Investigar a recuperação do ICS sem atribuir antecipadamente o problema a um único componente.
-3. Registrar medições atualizadas de memória, armazenamento e imagens do Docker.
-4. Planejar um serviço leve que resolva problema real, com limite de recursos, registro de logs e critério de remoção.
-5. Só então considerar observabilidade, recuperação e persistência.
+**Sem prazo:**
+- imagem completa do pendrive com Clonezilla;
+- habilitar a SVM na BIOS do PC (para WSL2 ou Docker Desktop);
+- avaliar ligar o Wyse direto no roteador, eliminando o ICS.
 
 ## Decisões vigentes
 
