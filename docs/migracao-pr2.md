@@ -225,5 +225,42 @@ Ou seja, as mudanças foram **mantidas**. Equipamentos não foram reiniciados.
   Resultado: `FIREWALL_INALTERADO`.
 - **Serviços.** `ssh` e `nftables` ativos; SSH novo a partir do PC OK; 4 contêineres no ar; **9/9 monitores UP**.
 - **Log do guard (evidência que faltava na fase 3):** `2026-11-27T21:01:25-03:00 guard: acesso confirmado; mudancas mantidas`, registrado no `guard.log` e no journal. As entradas da madrugada de 27/11 são do teste de reversão anterior, feito de propósito.
-- **Nota:** o comentário do `stacks/monitoring/compose.yaml` ainda cita o arquivo antigo. Não foi alterado, porque não há autorização para mudanças além da documentação.
+- O comentário do `stacks/monitoring/compose.yaml` que citava o arquivo antigo foi corrigido depois (só documentação; contêineres não recriados).
+
+## Validação final de persistência: reboot do Wyse (27/11/2026)
+
+Só o Wyse foi reiniciado; o Windows não. O reboot foi agendado pelo próprio script (`systemd-run`, +5 s) depois da linha de base, que exigiu ausência de backup, restauração ou `restic` em execução.
+
+**Linha de base (21:27):**
+- tudo OK, 9/9 monitores, nenhuma unit com falha;
+- regras sem estado (`nft -s list table inet homelab_fw`) = `9e7a3082…`.
+
+Na 1ª tentativa, a linha de base barrou o reboot por erro meu: comparei o hash da listagem **completa** das regras, que inclui contadores de pacotes e muda a cada pacote. Passei a usar a listagem sem estado (`nft -s`).
+
+**Tempo de retorno:**
+- comando de reboot às 21:27:13;
+- SSH caiu às 21:27:26 e voltou às 21:28:10, **44 s depois da queda** (57 s desde o comando);
+- boot do kernel às 21:27:40.
+
+**Depois do reboot:**
+
+| Verificação | Resultado |
+|---|---|
+| Drop-in do SSH e `nftables.conf` | md5 iguais (`5f6a9ef3…` e `01e1b6c1…`) |
+| Regras ativas sem estado | `REGRAS_IGUAIS_A_LINHA_DE_BASE (9e7a3082…)` |
+| `sshd -T` | `passwordauthentication no`, `permitrootlogin no`, `maxauthtries 3`, `logingracetime 30` |
+| Serviços de acesso | `ssh` ativo; `nftables` ativo e habilitado; guard sem nada armado |
+| Pelo PC | SSH por chave OK; senha recusada; Beszel e Kuma com HTTP 200; só as portas 22, 8090 e 3001 abertas (2375, 45876, 631, 80, 443, 8080 e 9000 bloqueadas) |
+| Internet e DNS | DNS OK; HTTPS 200 |
+| Hora | `NTPSynchronized=yes`, servidor NTP.br, stratum 1, offset −3,3 ms |
+| Contêineres | 4 no ar, voltaram sozinhos; beszel, beszel-agent e uptime-kuma `healthy` |
+| Monitores | **9/9 UP com batidas posteriores ao boot** (00:32–00:33 UTC; boot às 00:27:40 UTC). O push do backup segue UP dentro da janela de 26 h |
+| Agendamentos | backup em 28/11 03:35; restauração em 01/12 04:30 |
+| Último backup | `b6d9e6f2`; `restic check --read-data`: sem erros; manifesto do export OK |
+| Recursos logo após o boot | load 3,14 (inicialização); RAM 892 MiB usados de 5368; `/` em 28%; temperaturas 58–60 °C; contêineres somando cerca de 210 MiB (o Kuma usa 41% de CPU só na partida) |
+| Units com falha | 0 |
+
+A primeira leitura dos monitores, logo após o boot, ainda mostrava batidas anteriores ao reboot. Por isso ela foi refeita com 6 min de uptime, exigindo batidas pós-boot (resultado acima).
+
+**Resultado: persistência CONFIRMADA.**
 

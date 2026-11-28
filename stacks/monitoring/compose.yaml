@@ -4,8 +4,9 @@
 #   uptime-kuma   disponibilidade de servicos e pagina de status       -> :3001 (LAN)
 #   socket-proxy  acesso SOMENTE LEITURA a API do Docker para os dois acima
 #
-# Portas publicadas so ficam acessiveis da rede local se estiverem em
-# /etc/homelab/docker-lan-tcp (firewall nftables, ver scripts/server/homelab-apply.sh).
+# Portas publicadas so ficam acessiveis da rede local se estiverem em DOCKER_LAN_TCP
+# de /etc/homelab/firewall.conf (firewall nftables, ver scripts/server/lib/firewall.sh
+# e scripts/server/homelab-apply.sh).
 # Variaveis em .env (ver .env.example). Segredos do agente em ./secrets (fora do Git).
 
 x-logging: &logging
